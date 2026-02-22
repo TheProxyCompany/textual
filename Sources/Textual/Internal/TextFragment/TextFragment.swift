@@ -51,7 +51,7 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
   }
 
   private var text: Text {
-    textBuilder?.text ?? Text(verbatim: "")
+    textBuilder?.text ?? Text(verbatim: String(content.characters))
   }
 }
 
