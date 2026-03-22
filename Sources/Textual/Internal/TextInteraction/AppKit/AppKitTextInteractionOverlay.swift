@@ -31,6 +31,7 @@
       nsView.model = model
       nsView.exclusionRects = overflowFrames
       nsView.openURL = context.environment.openURL
+      nsView.window?.invalidateCursorRects(for: nsView)
     }
   }
 #endif
