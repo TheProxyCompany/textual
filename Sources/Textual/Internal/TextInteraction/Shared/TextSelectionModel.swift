@@ -83,6 +83,26 @@
     func layoutIndex(of layout: Text.Layout) -> Int? {
       layoutCollection.index(of: layout)
     }
+
+    func hitsTextContent(at point: CGPoint) -> Bool {
+      for layout in layoutCollection.layouts {
+        for line in layout.lines {
+          let lineRect = line.typographicBounds.offsetBy(dx: layout.origin.x, dy: layout.origin.y)
+          if lineRect.contains(point) {
+            return true
+          }
+        }
+      }
+      return false
+    }
+
+    func textContentRects() -> [CGRect] {
+      layoutCollection.layouts.flatMap { layout in
+        layout.lines.map { line in
+          line.typographicBounds.offsetBy(dx: layout.origin.x, dy: layout.origin.y)
+        }
+      }
+    }
   }
 
   extension TextSelectionModel {

@@ -46,8 +46,19 @@
 
       if isExcluded {
         return nil
-      } else {
-        return super.hitTest(point)
+      }
+
+      if !model.hitsTextContent(at: localPoint) {
+        return nil
+      }
+
+      return super.hitTest(point)
+    }
+
+    override func resetCursorRects() {
+      discardCursorRects()
+      for layout in model.textContentRects() {
+        addCursorRect(layout, cursor: .iBeam)
       }
     }
 
