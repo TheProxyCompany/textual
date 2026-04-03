@@ -136,6 +136,44 @@ extension StructuredText {
         }
       }
     }
+
+    func explicitAlignment(
+      of guide: HorizontalAlignment,
+      in bounds: CGRect,
+      proposal: ProposedViewSize,
+      subviews: Subviews,
+      cache: inout Cache
+    ) -> CGFloat? {
+      if guide == .leading {
+        return bounds.minX
+      }
+      if guide == .center {
+        return bounds.midX
+      }
+      if guide == .trailing {
+        return bounds.maxX
+      }
+      return nil
+    }
+
+    func explicitAlignment(
+      of guide: VerticalAlignment,
+      in bounds: CGRect,
+      proposal: ProposedViewSize,
+      subviews: Subviews,
+      cache: inout Cache
+    ) -> CGFloat? {
+      if guide == .top {
+        return bounds.minY
+      }
+      if guide == .center {
+        return bounds.midY
+      }
+      if guide == .bottom {
+        return bounds.maxY
+      }
+      return nil
+    }
   }
 }
 
