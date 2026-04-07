@@ -9,19 +9,27 @@ import SwiftUI
 // selection view so it can convert the current selected range into highlight rectangles.
 
 struct TextSelectionBackground: ViewModifier {
+  #if TEXTUAL_ENABLE_TEXT_SELECTION && canImport(AppKit)
+    @Environment(TextSelectionModel.self) private var textSelectionModel: TextSelectionModel?
+  #endif
+
   func body(content: Content) -> some View {
     #if TEXTUAL_ENABLE_TEXT_SELECTION && canImport(AppKit)
-      content
-        .backgroundPreferenceValue(Text.LayoutKey.self) { value in
-          if let anchoredLayout = value.first {
-            GeometryReader { geometry in
-              AppKitTextSelectionView(
-                layout: anchoredLayout.layout,
-                origin: geometry[anchoredLayout.origin]
-              )
+      if textSelectionModel?.selectedRange != nil {
+        content
+          .backgroundPreferenceValue(Text.LayoutKey.self) { value in
+            if let anchoredLayout = value.first {
+              GeometryReader { geometry in
+                AppKitTextSelectionView(
+                  layout: anchoredLayout.layout,
+                  origin: geometry[anchoredLayout.origin]
+                )
+              }
             }
           }
-        }
+      } else {
+        content
+      }
     #else
       content
     #endif
