@@ -36,7 +36,8 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
   }
 
   var body: some View {
-    text
+    let attachments = content.attachments()
+    let fragment = text
       .customAttribute(TextFragmentAttribute())
       .onGeometryChange(for: CGSize?.self, of: \.textContainerSize) { size in
         guard let size, let textBuilder else { return }
@@ -46,8 +47,15 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
         self.textBuilder = TextBuilder(newValue, environment: textEnvironment)
       }
       .modifier(TextSelectionBackground())
-      .modifier(AttachmentOverlay(attachments: content.attachments()))
-      .modifier(TextLinkInteraction())
+
+    if attachments.isEmpty {
+      fragment
+        .modifier(TextLinkInteraction())
+    } else {
+      fragment
+        .modifier(AttachmentOverlay(attachments: attachments))
+        .modifier(TextLinkInteraction())
+    }
   }
 
   private var text: Text {
