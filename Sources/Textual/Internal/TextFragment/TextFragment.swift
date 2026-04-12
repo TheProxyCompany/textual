@@ -37,6 +37,7 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
 
   var body: some View {
     let attachments = content.attachments()
+    let hasLinks = content.runs.contains { $0.link != nil }
     let fragment = text
       .customAttribute(TextFragmentAttribute())
       .onGeometryChange(for: CGSize?.self, of: \.textContainerSize) { size in
@@ -48,10 +49,16 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
       }
       .modifier(TextSelectionBackground())
 
-    if attachments.isEmpty {
+    switch (attachments.isEmpty, hasLinks) {
+    case (true, false):
+      fragment
+    case (true, true):
       fragment
         .modifier(TextLinkInteraction())
-    } else {
+    case (false, false):
+      fragment
+        .modifier(AttachmentOverlay(attachments: attachments))
+    case (false, true):
       fragment
         .modifier(AttachmentOverlay(attachments: attachments))
         .modifier(TextLinkInteraction())
