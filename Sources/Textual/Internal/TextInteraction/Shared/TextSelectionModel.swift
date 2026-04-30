@@ -60,11 +60,13 @@
         return
       }
 
-      // Try to reconcile the selected text range
-      self.selectedRange = layoutCollection.reconcileRange(
+      let reconciledRange = layoutCollection.reconcileRange(
         selectedRange,
         from: oldLayoutCollection
       )
+      if selectedRange != reconciledRange {
+        self.selectedRange = reconciledRange
+      }
     }
 
     func setCoordinator(_ coordinator: TextSelectionCoordinator?) {

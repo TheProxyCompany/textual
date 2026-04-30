@@ -3,6 +3,14 @@
 
   final class LiveTextLayoutCollection: TextLayoutCollection {
     private(set) lazy var layouts: [any TextLayout] = makeLayouts()
+    private lazy var equalitySignature = LayoutCollectionSignature(
+      layouts: layouts,
+      includeLayoutOrigin: true
+    )
+    private lazy var reconciliationSignature = LayoutCollectionSignature(
+      layouts: layouts,
+      includeLayoutOrigin: false
+    )
 
     private let base: Text.LayoutKey.Value
     private let geometry: GeometryProxy
@@ -13,12 +21,12 @@
     }
 
     func isEqual(to other: any TextLayoutCollection) -> Bool {
-      base == (other as? LiveTextLayoutCollection)?.base
+      equalitySignature == (other as? LiveTextLayoutCollection)?.equalitySignature
     }
 
     func needsPositionReconciliation(with other: any TextLayoutCollection) -> Bool {
-      // Same layouts with different origins do not need position reconciliation
-      base.map(\.layout) != (other as? LiveTextLayoutCollection)?.base.map(\.layout)
+      reconciliationSignature
+        != (other as? LiveTextLayoutCollection)?.reconciliationSignature
     }
 
     func index(of layout: Text.Layout) -> Int? {
@@ -195,5 +203,97 @@
   struct EmptyRunSlice: TextRunSlice {
     let typographicBounds: CGRect
     let characterRange: Range<Int>
+  }
+
+  private struct LayoutCollectionSignature: Equatable {
+    let layouts: [LayoutSignature]
+
+    init(layouts: [any TextLayout], includeLayoutOrigin: Bool) {
+      self.layouts = layouts.map {
+        LayoutSignature($0, includeLayoutOrigin: includeLayoutOrigin)
+      }
+    }
+  }
+
+  private struct LayoutSignature: Equatable {
+    let text: String
+    let origin: QuantizedPoint?
+    let bounds: QuantizedRect
+    let lines: [LineSignature]
+
+    init(_ layout: any TextLayout, includeLayoutOrigin: Bool) {
+      self.text = layout.attributedString.string
+      self.origin = includeLayoutOrigin ? QuantizedPoint(layout.origin) : nil
+      self.bounds = QuantizedRect(layout.bounds)
+      self.lines = layout.lines.map(LineSignature.init)
+    }
+  }
+
+  private struct LineSignature: Equatable {
+    let origin: QuantizedPoint
+    let bounds: QuantizedRect
+    let runs: [RunSignature]
+
+    init(_ line: any TextLine) {
+      self.origin = QuantizedPoint(line.origin)
+      self.bounds = QuantizedRect(line.typographicBounds)
+      self.runs = line.runs.map(RunSignature.init)
+    }
+  }
+
+  private struct RunSignature: Equatable {
+    let layoutDirection: LayoutDirection
+    let bounds: QuantizedRect
+    let url: URL?
+    let slices: [RunSliceSignature]
+
+    init(_ run: any TextRun) {
+      self.layoutDirection = run.layoutDirection
+      self.bounds = QuantizedRect(run.typographicBounds)
+      self.url = run.url
+      self.slices = run.slices.map(RunSliceSignature.init)
+    }
+  }
+
+  private struct RunSliceSignature: Equatable {
+    let bounds: QuantizedRect
+    let characterRange: Range<Int>
+
+    init(_ slice: any TextRunSlice) {
+      self.bounds = QuantizedRect(slice.typographicBounds)
+      self.characterRange = slice.characterRange
+    }
+  }
+
+  private struct QuantizedPoint: Equatable {
+    let x: Int64
+    let y: Int64
+
+    init(_ point: CGPoint) {
+      self.x = Self.quantize(point.x)
+      self.y = Self.quantize(point.y)
+    }
+
+    private static func quantize(_ value: CGFloat) -> Int64 {
+      Int64((value * 1_000).rounded())
+    }
+  }
+
+  private struct QuantizedRect: Equatable {
+    let x: Int64
+    let y: Int64
+    let width: Int64
+    let height: Int64
+
+    init(_ rect: CGRect) {
+      self.x = Self.quantize(rect.origin.x)
+      self.y = Self.quantize(rect.origin.y)
+      self.width = Self.quantize(rect.size.width)
+      self.height = Self.quantize(rect.size.height)
+    }
+
+    private static func quantize(_ value: CGFloat) -> Int64 {
+      Int64((value * 1_000).rounded())
+    }
   }
 #endif
