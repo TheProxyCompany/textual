@@ -24,11 +24,13 @@ struct TextSelectionInteraction: ViewModifier {
       if textSelection.allowsSelection {
         content
           .overlayTextLayoutCollection { layoutCollection in
-            Color.clear
-              .onChange(of: AnyTextLayoutCollection(layoutCollection), initial: true) {
-                model.setCoordinator(coordinator)
-                model.setLayoutCollection(layoutCollection)
-              }
+            TextLayoutCollectionReporter(
+              layoutCollection: layoutCollection
+            ) { layoutCollection in
+              model.setCoordinator(coordinator)
+              model.setLayoutCollection(layoutCollection)
+            }
+            .allowsHitTesting(false)
           }
           .modifier(PlatformTextSelectionInteraction(model: model))
       } else {

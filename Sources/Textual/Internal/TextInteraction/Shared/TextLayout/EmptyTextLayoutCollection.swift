@@ -6,10 +6,6 @@
       []
     }
 
-    func isEqual(to other: any TextLayoutCollection) -> Bool {
-      other.layouts.isEmpty
-    }
-
     func needsPositionReconciliation(with other: any TextLayoutCollection) -> Bool {
       false
     }

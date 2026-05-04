@@ -3,14 +3,7 @@
 
   final class LiveTextLayoutCollection: TextLayoutCollection {
     private(set) lazy var layouts: [any TextLayout] = makeLayouts()
-    private lazy var equalitySignature = LayoutCollectionSignature(
-      layouts: layouts,
-      includeLayoutOrigin: true
-    )
-    private lazy var reconciliationSignature = LayoutCollectionSignature(
-      layouts: layouts,
-      includeLayoutOrigin: false
-    )
+    private lazy var selectionStructureSignature = SelectionStructureSignature(layouts: layouts)
 
     private let base: Text.LayoutKey.Value
     private let geometry: GeometryProxy
@@ -20,13 +13,9 @@
       self.geometry = geometry
     }
 
-    func isEqual(to other: any TextLayoutCollection) -> Bool {
-      equalitySignature == (other as? LiveTextLayoutCollection)?.equalitySignature
-    }
-
     func needsPositionReconciliation(with other: any TextLayoutCollection) -> Bool {
-      reconciliationSignature
-        != (other as? LiveTextLayoutCollection)?.reconciliationSignature
+      selectionStructureSignature
+        != (other as? LiveTextLayoutCollection)?.selectionStructureSignature
     }
 
     func index(of layout: Text.Layout) -> Int? {
@@ -205,63 +194,47 @@
     let characterRange: Range<Int>
   }
 
-  private struct LayoutCollectionSignature: Equatable {
-    let layouts: [LayoutSignature]
+  private struct SelectionStructureSignature: Equatable {
+    let layouts: [LayoutStructureSignature]
 
-    init(layouts: [any TextLayout], includeLayoutOrigin: Bool) {
-      self.layouts = layouts.map {
-        LayoutSignature($0, includeLayoutOrigin: includeLayoutOrigin)
-      }
+    init(layouts: [any TextLayout]) {
+      self.layouts = layouts.map(LayoutStructureSignature.init)
     }
   }
 
-  private struct LayoutSignature: Equatable {
+  private struct LayoutStructureSignature: Equatable {
     let text: String
-    let origin: QuantizedPoint?
     let bounds: QuantizedRect
-    let lines: [LineSignature]
+    let lines: [LineStructureSignature]
 
-    init(_ layout: any TextLayout, includeLayoutOrigin: Bool) {
+    init(_ layout: any TextLayout) {
       self.text = layout.attributedString.string
-      self.origin = includeLayoutOrigin ? QuantizedPoint(layout.origin) : nil
       self.bounds = QuantizedRect(layout.bounds)
-      self.lines = layout.lines.map(LineSignature.init)
+      self.lines = layout.lines.map(LineStructureSignature.init)
     }
   }
 
-  private struct LineSignature: Equatable {
+  private struct LineStructureSignature: Equatable {
     let origin: QuantizedPoint
     let bounds: QuantizedRect
-    let runs: [RunSignature]
+    let runs: [RunStructureSignature]
 
     init(_ line: any TextLine) {
       self.origin = QuantizedPoint(line.origin)
       self.bounds = QuantizedRect(line.typographicBounds)
-      self.runs = line.runs.map(RunSignature.init)
+      self.runs = line.runs.map(RunStructureSignature.init)
     }
   }
 
-  private struct RunSignature: Equatable {
+  private struct RunStructureSignature: Equatable {
     let layoutDirection: LayoutDirection
     let bounds: QuantizedRect
     let url: URL?
-    let slices: [RunSliceSignature]
 
     init(_ run: any TextRun) {
       self.layoutDirection = run.layoutDirection
       self.bounds = QuantizedRect(run.typographicBounds)
       self.url = run.url
-      self.slices = run.slices.map(RunSliceSignature.init)
-    }
-  }
-
-  private struct RunSliceSignature: Equatable {
-    let bounds: QuantizedRect
-    let characterRange: Range<Int>
-
-    init(_ slice: any TextRunSlice) {
-      self.bounds = QuantizedRect(slice.typographicBounds)
-      self.characterRange = slice.characterRange
     }
   }
 

@@ -10,10 +10,6 @@
 
     let _layouts: [CodableTextLayout]
 
-    func isEqual(to other: any Textual.TextLayoutCollection) -> Bool {
-      _layouts == (other as? CodableTextLayoutCollection)?._layouts
-    }
-
     func needsPositionReconciliation(with other: any Textual.TextLayoutCollection) -> Bool {
       false
     }

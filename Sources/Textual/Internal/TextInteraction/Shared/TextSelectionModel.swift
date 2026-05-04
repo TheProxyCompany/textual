@@ -46,17 +46,14 @@
     }
 
     func setLayoutCollection(_ layoutCollection: any TextLayoutCollection) {
-      guard !layoutCollection.isEqual(to: self.layoutCollection) else {
-        return
-      }
-
       let oldLayoutCollection = self.layoutCollection
       self.layoutCollection = layoutCollection
 
-      guard
-        let selectedRange,
-        layoutCollection.needsPositionReconciliation(with: oldLayoutCollection)
-      else {
+      guard let selectedRange else {
+        return
+      }
+
+      guard layoutCollection.needsPositionReconciliation(with: oldLayoutCollection) else {
         return
       }
 
