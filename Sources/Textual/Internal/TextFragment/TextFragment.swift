@@ -18,9 +18,8 @@ import SwiftUI
 // Text.Layout and render in fragment-local coordinates. Fragment-level overlays enable
 // coordinate space isolation and keep scrollable regions interactive.
 //
-// An ancestor view must define a named coordinate space (.textContainer) for the text
-// container. TextFragment uses onGeometryChange to observe the container size and rebuild
-// Text when attachment sizes need to change.
+// TextFragment observes its local size only when attachments are present, then rebuilds Text
+// when attachment sizes need to change.
 //
 // TextFragment is used by InlineText and StructuredText (via BlockContent) to render
 // attributed content with inline attachments, links, and selection.
@@ -38,16 +37,24 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
   var body: some View {
     let attachments = content.attachments()
     let hasLinks = content.runs.contains { $0.link != nil }
-    let fragment = text
+    let base = text
       .customAttribute(TextFragmentAttribute())
-      .onGeometryChange(for: CGSize?.self, of: \.textContainerSize) { size in
-        guard let size, let textBuilder else { return }
-        textBuilder.sizeChanged(size, environment: textEnvironment)
-      }
       .onChange(of: content, initial: true) { _, newValue in
         self.textBuilder = TextBuilder(newValue, environment: textEnvironment)
       }
-      .modifier(TextSelectionBackground())
+
+    let fragment = Group {
+      if attachments.isEmpty {
+        base
+      } else {
+        base
+          .onGeometryChange(for: CGSize?.self, of: \.textContainerSize) { size in
+            guard let size, let textBuilder else { return }
+            textBuilder.sizeChanged(size, environment: textEnvironment)
+          }
+      }
+    }
+    .modifier(TextSelectionBackground())
 
     switch (attachments.isEmpty, hasLinks) {
     case (true, false):
@@ -87,6 +94,6 @@ extension CoordinateSpaceProtocol where Self == NamedCoordinateSpace {
 
 extension GeometryProxy {
   fileprivate var textContainerSize: CGSize? {
-    bounds(of: .textContainer)?.size
+    size
   }
 }

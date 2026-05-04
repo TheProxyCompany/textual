@@ -61,24 +61,21 @@ extension StructuredText {
 
   fileprivate struct BlockVStackLayout: Layout {
     struct Cache {
-      let spacings: [CGFloat]
+      var spacings: [CGFloat]
+      var measuredWidth: CGFloat?
+      var measuredSizes: [CGSize]
     }
 
     let textAlignment: TextAlignment
 
     func makeCache(subviews: Subviews) -> Cache {
-      return Cache(
-        spacings: subviews.indices.dropLast().map { index in
-          let current = subviews[index]
-          let next = subviews[index + 1]
-          let currentBottom = current[BlockSpacingKey.self].bottom
-          let nextTop = next[BlockSpacingKey.self].top
+      Cache(spacings: spacings(for: subviews), measuredWidth: nil, measuredSizes: [])
+    }
 
-          // Take the maximum block spacing, otherwise the preferred view spacing
-          return [currentBottom, nextTop].compactMap(\.self).max()
-            ?? current.spacing.distance(to: next.spacing, along: .vertical)
-        }
-      )
+    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+      cache.spacings = spacings(for: subviews)
+      cache.measuredWidth = nil
+      cache.measuredSizes = []
     }
 
     func sizeThatFits(
@@ -90,9 +87,9 @@ extension StructuredText {
       }
 
       var size = CGSize.zero
+      let viewSizes = measuredSizes(for: proposal, subviews: subviews, cache: &cache)
 
-      for view in subviews {
-        let viewSize = view.sizeThatFits(.init(width: proposal.width, height: nil))
+      for viewSize in viewSizes {
         size.height += viewSize.height
         size.width = max(size.width, viewSize.width)
       }
@@ -108,10 +105,11 @@ extension StructuredText {
       subviews: Subviews, cache: inout Cache
     ) {
       var currentY: CGFloat = 0
+      let viewProposal = ProposedViewSize(width: proposal.width, height: nil)
+      let viewSizes = measuredSizes(for: proposal, subviews: subviews, cache: &cache)
 
       for (index, view) in zip(subviews.indices, subviews) {
-        let viewProposal = ProposedViewSize(width: proposal.width, height: nil)
-        let viewSize = view.sizeThatFits(viewProposal)
+        let viewSize = viewSizes[index]
 
         var point = bounds.origin
         let alignment = view[BlockAlignmentKey.self] ?? textAlignment
@@ -135,6 +133,34 @@ extension StructuredText {
           currentY += cache.spacings[index]
         }
       }
+    }
+
+    private func spacings(for subviews: Subviews) -> [CGFloat] {
+      subviews.indices.dropLast().map { index in
+        let current = subviews[index]
+        let next = subviews[index + 1]
+        let currentBottom = current[BlockSpacingKey.self].bottom
+        let nextTop = next[BlockSpacingKey.self].top
+
+        return [currentBottom, nextTop].compactMap(\.self).max()
+          ?? current.spacing.distance(to: next.spacing, along: .vertical)
+      }
+    }
+
+    private func measuredSizes(
+      for proposal: ProposedViewSize,
+      subviews: Subviews,
+      cache: inout Cache
+    ) -> [CGSize] {
+      if cache.measuredWidth == proposal.width, cache.measuredSizes.count == subviews.count {
+        return cache.measuredSizes
+      }
+
+      let viewProposal = ProposedViewSize(width: proposal.width, height: nil)
+      let sizes = subviews.map { $0.sizeThatFits(viewProposal) }
+      cache.measuredWidth = proposal.width
+      cache.measuredSizes = sizes
+      return sizes
     }
 
     func explicitAlignment(

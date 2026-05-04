@@ -18,6 +18,7 @@
         selectionWillChange?()
       }
       didSet {
+        hasSelection = selectedRange != nil
         if selectedRange != nil {
           coordinator?.modelDidSelectText(self)
         }
@@ -35,6 +36,9 @@
     private var layoutCollection: any TextLayoutCollection
 
     @ObservationIgnored
+    private var hasSelection = false
+
+    @ObservationIgnored
     private weak var coordinator: TextSelectionCoordinator?
 
     init(
@@ -49,7 +53,7 @@
       let oldLayoutCollection = self.layoutCollection
       self.layoutCollection = layoutCollection
 
-      guard let selectedRange else {
+      guard hasSelection, let selectedRange else {
         return
       }
 
