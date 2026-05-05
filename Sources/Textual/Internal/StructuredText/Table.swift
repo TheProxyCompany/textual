@@ -34,7 +34,9 @@ extension StructuredText {
       )
       let resolvedStyle = tableStyle.resolve(configuration: configuration)
         .onPreferenceChange(TableCell.SpacingKey.self) { @MainActor in
-          spacing = $0
+          if spacing != $0 {
+            spacing = $0
+          }
         }
 
       AnyView(resolvedStyle)

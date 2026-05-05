@@ -53,7 +53,10 @@ extension StructuredText {
       content
         .onPreferenceChange(BlockSpacingKey.self) { @MainActor value in
           // Override with the resolved list item spacing if enabled
-          blockSpacing = listItemSpacingEnabled ? resolvedListItemSpacing : value
+          let nextSpacing = listItemSpacingEnabled ? resolvedListItemSpacing : value
+          if blockSpacing != nextSpacing {
+            blockSpacing = nextSpacing
+          }
         }
         .layoutValue(key: BlockSpacingKey.self, value: blockSpacing)
     }
