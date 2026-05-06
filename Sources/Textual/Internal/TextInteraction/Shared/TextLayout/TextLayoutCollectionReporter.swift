@@ -13,10 +13,17 @@
       }
 
       func updateNSView(_ nsView: ReportingView, context: Context) {
+        let layoutCollectionID = ObjectIdentifier(layoutCollection)
+        guard nsView.layoutCollectionID != layoutCollectionID else {
+          return
+        }
+        nsView.layoutCollectionID = layoutCollectionID
         onUpdate(layoutCollection)
       }
 
       final class ReportingView: NSView {
+        var layoutCollectionID: ObjectIdentifier?
+
         override func hitTest(_ point: NSPoint) -> NSView? {
           nil
         }
@@ -30,13 +37,22 @@
       let onUpdate: (any TextLayoutCollection) -> Void
 
       func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
+        let view = ReportingView(frame: .zero)
         view.isUserInteractionEnabled = false
         return view
       }
 
       func updateUIView(_ uiView: UIView, context: Context) {
+        let layoutCollectionID = ObjectIdentifier(layoutCollection)
+        guard (uiView as? ReportingView)?.layoutCollectionID != layoutCollectionID else {
+          return
+        }
+        (uiView as? ReportingView)?.layoutCollectionID = layoutCollectionID
         onUpdate(layoutCollection)
+      }
+
+      final class ReportingView: UIView {
+        var layoutCollectionID: ObjectIdentifier?
       }
     }
   #endif

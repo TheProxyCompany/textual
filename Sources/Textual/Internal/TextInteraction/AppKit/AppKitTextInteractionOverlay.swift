@@ -28,8 +28,14 @@
     }
 
     func updateNSView(_ nsView: NSTextInteractionView, context: Context) {
-      nsView.model = model
-      nsView.exclusionRects = overflowFrames
+      if nsView.model !== model {
+        nsView.model = model
+        nsView.window?.invalidateCursorRects(for: nsView)
+      }
+      if nsView.exclusionRects != overflowFrames {
+        nsView.exclusionRects = overflowFrames
+        nsView.window?.invalidateCursorRects(for: nsView)
+      }
       nsView.openURL = context.environment.openURL
     }
   }

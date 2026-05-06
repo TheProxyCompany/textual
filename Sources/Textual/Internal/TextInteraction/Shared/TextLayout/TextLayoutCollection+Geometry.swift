@@ -2,6 +2,16 @@
   import SwiftUI
 
   extension TextLayoutCollection {
+    var textContentFrames: [CGRect] {
+      layouts.compactMap { layout in
+        let frame = layout.frame
+        guard frame.isUsableTextContentFrame else {
+          return nil
+        }
+        return frame
+      }
+    }
+
     func url(for point: CGPoint) -> URL? {
       guard let layout = layouts.first(where: { $0.frame.contains(point) }) else {
         return nil
@@ -352,6 +362,15 @@
       let dx = horizontalDistance(to: point.x)
       let dy = verticalDistance(to: point.y)
       return dx * dx + dy * dy
+    }
+
+    fileprivate var isUsableTextContentFrame: Bool {
+      !isNull
+        && !isEmpty
+        && origin.x.isFinite
+        && origin.y.isFinite
+        && size.width.isFinite
+        && size.height.isFinite
     }
   }
 #endif

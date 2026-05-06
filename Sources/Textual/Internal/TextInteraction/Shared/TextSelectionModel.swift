@@ -50,6 +50,10 @@
     }
 
     func setLayoutCollection(_ layoutCollection: any TextLayoutCollection) {
+      guard self.layoutCollection !== layoutCollection else {
+        return
+      }
+
       let oldLayoutCollection = self.layoutCollection
       self.layoutCollection = layoutCollection
 
@@ -88,23 +92,11 @@
     }
 
     func hitsTextContent(at point: CGPoint) -> Bool {
-      for layout in layoutCollection.layouts {
-        for line in layout.lines {
-          let lineRect = line.typographicBounds.offsetBy(dx: layout.origin.x, dy: layout.origin.y)
-          if lineRect.contains(point) {
-            return true
-          }
-        }
-      }
-      return false
+      layoutCollection.textContentFrames.contains { $0.contains(point) }
     }
 
     func textContentRects() -> [CGRect] {
-      layoutCollection.layouts.flatMap { layout in
-        layout.lines.map { line in
-          line.typographicBounds.offsetBy(dx: layout.origin.x, dy: layout.origin.y)
-        }
-      }
+      layoutCollection.textContentFrames
     }
   }
 

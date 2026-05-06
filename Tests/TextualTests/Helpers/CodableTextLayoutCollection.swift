@@ -3,12 +3,20 @@
 
   @testable import Textual
 
-  struct CodableTextLayoutCollection: Equatable, TextLayoutCollection {
+  final class CodableTextLayoutCollection: Equatable, TextLayoutCollection {
     var layouts: [any Textual.TextLayout] {
       _layouts
     }
 
     let _layouts: [CodableTextLayout]
+
+    init(_layouts: [CodableTextLayout]) {
+      self._layouts = _layouts
+    }
+
+    static func == (lhs: CodableTextLayoutCollection, rhs: CodableTextLayoutCollection) -> Bool {
+      lhs._layouts == rhs._layouts
+    }
 
     func needsPositionReconciliation(with other: any Textual.TextLayoutCollection) -> Bool {
       false
@@ -20,15 +28,15 @@
   }
 
   extension CodableTextLayoutCollection {
-    init(_ base: any TextLayoutCollection) {
+    convenience init(_ base: any TextLayoutCollection) {
       self.init(_layouts: base.layouts.map(CodableTextLayout.init))
     }
   }
 
   extension CodableTextLayoutCollection: Codable {
-    init(from decoder: any Decoder) throws {
+    convenience init(from decoder: any Decoder) throws {
       let container = try decoder.singleValueContainer()
-      self._layouts = try container.decode([CodableTextLayout].self)
+      try self.init(_layouts: container.decode([CodableTextLayout].self))
     }
 
     func encode(to encoder: any Encoder) throws {

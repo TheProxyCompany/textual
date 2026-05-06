@@ -203,12 +203,12 @@
   }
 
   private struct LayoutStructureSignature: Equatable {
-    let text: String
+    let length: Int
     let bounds: QuantizedRect
     let lines: [LineStructureSignature]
 
     init(_ layout: any TextLayout) {
-      self.text = layout.attributedString.string
+      self.length = layout.attributedString.length
       self.bounds = QuantizedRect(layout.bounds)
       self.lines = layout.lines.map(LineStructureSignature.init)
     }
@@ -217,24 +217,10 @@
   private struct LineStructureSignature: Equatable {
     let origin: QuantizedPoint
     let bounds: QuantizedRect
-    let runs: [RunStructureSignature]
 
     init(_ line: any TextLine) {
       self.origin = QuantizedPoint(line.origin)
       self.bounds = QuantizedRect(line.typographicBounds)
-      self.runs = line.runs.map(RunStructureSignature.init)
-    }
-  }
-
-  private struct RunStructureSignature: Equatable {
-    let layoutDirection: LayoutDirection
-    let bounds: QuantizedRect
-    let url: URL?
-
-    init(_ run: any TextRun) {
-      self.layoutDirection = run.layoutDirection
-      self.bounds = QuantizedRect(run.typographicBounds)
-      self.url = run.url
     }
   }
 

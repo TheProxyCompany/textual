@@ -1,7 +1,7 @@
 #if TEXTUAL_ENABLE_TEXT_SELECTION
   import SwiftUI
 
-  protocol TextLayoutCollection {
+  protocol TextLayoutCollection: AnyObject {
     var layouts: [any TextLayout] { get }
 
     func needsPositionReconciliation(with other: any TextLayoutCollection) -> Bool
