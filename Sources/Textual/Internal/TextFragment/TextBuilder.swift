@@ -67,6 +67,13 @@ extension TextFragment {
 }
 
 extension Text {
+  static func textualText(
+    attributedString: some AttributedStringProtocol,
+    in environment: TextEnvironmentValues
+  ) -> Text {
+    Text(attributedString: attributedString, attachmentSizes: [:], in: environment)
+  }
+
   fileprivate init(
     attributedString: some AttributedStringProtocol,
     attachmentSizes: [AttachmentKey: CGSize],

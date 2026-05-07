@@ -108,6 +108,7 @@ public struct InlineText: View {
   public init(_ markup: String, parser: any MarkupParser) {
     self.markup = markup
     self.parser = parser
+    self._attributedString = State(initialValue: Self.parse(markup, parser: parser))
   }
 
   public var body: some View {
@@ -118,9 +119,16 @@ public struct InlineText: View {
       }
     }
     .coordinateSpace(.textContainer)
-    .onChange(of: markup, initial: true) { _, value in
-      self.attributedString = (try? parser.attributedString(for: value)) ?? .init()
+    .onChange(of: markup) { _, value in
+      let next = Self.parse(value, parser: parser)
+      if attributedString != next {
+        attributedString = next
+      }
     }
+  }
+
+  private static func parse(_ markup: String, parser: any MarkupParser) -> AttributedString {
+    (try? parser.attributedString(for: markup)) ?? .init()
   }
 }
 

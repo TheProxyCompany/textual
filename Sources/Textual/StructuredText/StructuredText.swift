@@ -113,6 +113,7 @@ public struct StructuredText: View {
   public init(_ markup: String, parser: any MarkupParser) {
     self.markup = markup
     self.parser = parser
+    self._attributedString = State(initialValue: Self.parse(markup, parser: parser))
   }
 
   public var body: some View {
@@ -122,7 +123,7 @@ public struct StructuredText: View {
         .modifier(TextSelectionCoordination())
     }
     .coordinateSpace(.textContainer)
-    .onChange(of: markup, initial: true) {
+    .onChange(of: markup) {
       markupDidChange(markup)
     }
     // Disable line limit to avoid per-fragment truncation
@@ -130,7 +131,14 @@ public struct StructuredText: View {
   }
 
   private func markupDidChange(_ markup: String) {
-    self.attributedString = (try? parser.attributedString(for: markup)) ?? .init()
+    let next = Self.parse(markup, parser: parser)
+    if attributedString != next {
+      attributedString = next
+    }
+  }
+
+  private static func parse(_ markup: String, parser: any MarkupParser) -> AttributedString {
+    (try? parser.attributedString(for: markup)) ?? .init()
   }
 }
 

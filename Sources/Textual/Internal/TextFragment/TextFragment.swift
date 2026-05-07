@@ -37,21 +37,22 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
   var body: some View {
     let attachments = content.attachments()
     let hasLinks = content.runs.contains { $0.link != nil }
-    let base = text
+    let hasAttachments = !attachments.isEmpty
+    let base = text(hasAttachments: hasAttachments)
       .customAttribute(TextFragmentAttribute())
-      .onChange(of: content, initial: true) { _, newValue in
-        self.textBuilder = TextBuilder(newValue, environment: textEnvironment)
-      }
 
     let fragment = Group {
-      if attachments.isEmpty {
+      if hasAttachments {
         base
-      } else {
-        base
+          .onChange(of: content, initial: true) { _, newValue in
+            self.textBuilder = TextBuilder(newValue, environment: textEnvironment)
+          }
           .onGeometryChange(for: CGSize?.self, of: \.textContainerSize) { size in
             guard let size, let textBuilder else { return }
             textBuilder.sizeChanged(size, environment: textEnvironment)
           }
+      } else {
+        base
       }
     }
     .modifier(TextSelectionBackground())
@@ -72,8 +73,11 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
     }
   }
 
-  private var text: Text {
-    textBuilder?.text ?? Text(verbatim: String(content.characters))
+  private func text(hasAttachments: Bool) -> Text {
+    if hasAttachments {
+      return textBuilder?.text ?? Text(verbatim: String(content.characters))
+    }
+    return Text.textualText(attributedString: content, in: textEnvironment)
   }
 }
 
