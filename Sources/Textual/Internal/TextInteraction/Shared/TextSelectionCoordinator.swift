@@ -19,14 +19,18 @@ import SwiftUI
     private var models: [WeakBox<TextSelectionModel>] = []
 
     func register(_ model: TextSelectionModel) {
-      models.append(WeakBox(model))
       compact()
+      guard !models.contains(where: { $0.wrapped === model }) else {
+        return
+      }
+      models.append(WeakBox(model))
     }
 
     func modelDidSelectText(_ model: TextSelectionModel) {
-      // Clear selection in the other models
       for weakModel in models where weakModel.wrapped !== model {
-        weakModel.wrapped?.selectedRange = nil
+        if weakModel.wrapped?.selectedRange != nil {
+          weakModel.wrapped?.selectedRange = nil
+        }
       }
       compact()
     }

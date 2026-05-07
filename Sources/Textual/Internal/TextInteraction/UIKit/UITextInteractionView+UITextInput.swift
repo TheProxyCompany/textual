@@ -27,7 +27,10 @@
       get { model.selectedRange.map(TextRangeBox.init) }
       set {
         let rangeBox = newValue as? TextRangeBox
-        model.selectedRange = rangeBox?.wrappedValue
+        let nextRange = rangeBox?.wrappedValue
+        if model.selectedRange != nextRange {
+          model.selectedRange = nextRange
+        }
         logger.debug("selectedTextRange = \(newValue)")
       }
     }

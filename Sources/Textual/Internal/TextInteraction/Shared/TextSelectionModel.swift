@@ -14,12 +14,14 @@
   @Observable
   final class TextSelectionModel {
     var selectedRange: TextRange? {
-      willSet {
+      get { selectedRangeStorage }
+      set {
+        guard selectedRangeStorage != newValue else {
+          return
+        }
         selectionWillChange?()
-      }
-      didSet {
-        hasSelection = selectedRange != nil
-        if selectedRange != nil {
+        selectedRangeStorage = newValue
+        if selectedRangeStorage != nil {
           coordinator?.modelDidSelectText(self)
         }
         selectionDidChange?()
@@ -35,8 +37,7 @@
     @ObservationIgnored
     private var layoutCollection: any TextLayoutCollection
 
-    @ObservationIgnored
-    private var hasSelection = false
+    private var selectedRangeStorage: TextRange?
 
     @ObservationIgnored
     private weak var coordinator: TextSelectionCoordinator?
@@ -57,7 +58,7 @@
       let oldLayoutCollection = self.layoutCollection
       self.layoutCollection = layoutCollection
 
-      guard hasSelection, let selectedRange else {
+      guard let selectedRange else {
         return
       }
 

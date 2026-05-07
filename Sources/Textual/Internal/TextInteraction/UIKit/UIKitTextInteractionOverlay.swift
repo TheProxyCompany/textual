@@ -28,8 +28,12 @@
     }
 
     func updateUIView(_ uiView: UITextInteractionView, context: Context) {
-      uiView.model = model
-      uiView.exclusionRects = overflowFrames
+      if uiView.model !== model {
+        uiView.model = model
+      }
+      if uiView.exclusionRects != overflowFrames {
+        uiView.exclusionRects = overflowFrames
+      }
       uiView.openURL = context.environment.openURL
     }
   }

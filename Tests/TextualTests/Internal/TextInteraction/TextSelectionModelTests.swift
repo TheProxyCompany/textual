@@ -877,6 +877,45 @@
       #expect(result == model.endPosition)
     }
 
+    @Test
+    func settingSameSelectedRangeDoesNotNotifyAgain() {
+      // given
+      let model = TextSelectionModel()
+      let range = TextRange(
+        start: TextPosition(indexPath: .init(layout: 0), affinity: .downstream),
+        end: TextPosition(indexPath: .init(layout: 0), affinity: .upstream)
+      )
+      var willChangeCount = 0
+      var didChangeCount = 0
+      model.selectionWillChange = { willChangeCount += 1 }
+      model.selectionDidChange = { didChangeCount += 1 }
+
+      // when
+      model.selectedRange = range
+      model.selectedRange = range
+
+      // then
+      #expect(willChangeCount == 1)
+      #expect(didChangeCount == 1)
+    }
+
+    @Test
+    func clearingEmptySelectedRangeDoesNotNotify() {
+      // given
+      let model = TextSelectionModel()
+      var willChangeCount = 0
+      var didChangeCount = 0
+      model.selectionWillChange = { willChangeCount += 1 }
+      model.selectionDidChange = { didChangeCount += 1 }
+
+      // when
+      model.selectedRange = nil
+
+      // then
+      #expect(willChangeCount == 0)
+      #expect(didChangeCount == 0)
+    }
+
     #if os(iOS)
       @Test(.disabled())
       @MainActor

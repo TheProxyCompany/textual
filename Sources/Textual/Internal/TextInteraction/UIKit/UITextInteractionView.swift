@@ -17,7 +17,16 @@
       true
     }
 
-    var model: TextSelectionModel
+    var model: TextSelectionModel {
+      didSet {
+        guard oldValue !== model else {
+          return
+        }
+        oldValue.selectionWillChange = nil
+        oldValue.selectionDidChange = nil
+        bindModelCallbacks()
+      }
+    }
     var exclusionRects: [CGRect]
     var openURL: OpenURLAction
 
@@ -85,14 +94,7 @@
     }
 
     private func setUp() {
-      model.selectionWillChange = { [weak self] in
-        guard let self else { return }
-        self.inputDelegate?.selectionWillChange(self)
-      }
-      model.selectionDidChange = { [weak self] in
-        guard let self else { return }
-        self.inputDelegate?.selectionDidChange(self)
-      }
+      bindModelCallbacks()
 
       let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
       addGestureRecognizer(tapGesture)
@@ -105,6 +107,17 @@
       }
 
       addInteraction(selectionInteraction)
+    }
+
+    private func bindModelCallbacks() {
+      model.selectionWillChange = { [weak self] in
+        guard let self else { return }
+        self.inputDelegate?.selectionWillChange(self)
+      }
+      model.selectionDidChange = { [weak self] in
+        guard let self else { return }
+        self.inputDelegate?.selectionDidChange(self)
+      }
     }
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {

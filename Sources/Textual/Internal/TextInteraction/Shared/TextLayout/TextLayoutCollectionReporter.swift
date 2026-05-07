@@ -44,10 +44,11 @@
 
       func updateUIView(_ uiView: UIView, context: Context) {
         let layoutCollectionID = ObjectIdentifier(layoutCollection)
-        guard (uiView as? ReportingView)?.layoutCollectionID != layoutCollectionID else {
+        guard let reportingView = uiView as? ReportingView,
+          reportingView.layoutCollectionID != layoutCollectionID else {
           return
         }
-        (uiView as? ReportingView)?.layoutCollectionID = layoutCollectionID
+        reportingView.layoutCollectionID = layoutCollectionID
         onUpdate(layoutCollection)
       }
 
