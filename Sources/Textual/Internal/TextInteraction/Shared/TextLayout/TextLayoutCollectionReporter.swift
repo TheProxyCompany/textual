@@ -13,16 +13,20 @@
       }
 
       func updateNSView(_ nsView: ReportingView, context: Context) {
-        let layoutCollectionID = ObjectIdentifier(layoutCollection)
-        guard nsView.layoutCollectionID != layoutCollectionID else {
+        // Identity guards are useless here: `LiveTextLayoutCollection` is allocated
+        // fresh per body, so ObjectIdentifier always differs. Compare by structure
+        // signature instead — if the layouts didn't meaningfully change, skip the work.
+        if let existing = nsView.layoutCollection,
+          !layoutCollection.needsPositionReconciliation(with: existing) {
+          nsView.layoutCollection = layoutCollection
           return
         }
-        nsView.layoutCollectionID = layoutCollectionID
+        nsView.layoutCollection = layoutCollection
         onUpdate(layoutCollection)
       }
 
       final class ReportingView: NSView {
-        var layoutCollectionID: ObjectIdentifier?
+        var layoutCollection: (any TextLayoutCollection)?
 
         override func hitTest(_ point: NSPoint) -> NSView? {
           nil
@@ -43,17 +47,20 @@
       }
 
       func updateUIView(_ uiView: UIView, context: Context) {
-        let layoutCollectionID = ObjectIdentifier(layoutCollection)
-        guard let reportingView = uiView as? ReportingView,
-          reportingView.layoutCollectionID != layoutCollectionID else {
+        guard let reportingView = uiView as? ReportingView else {
           return
         }
-        reportingView.layoutCollectionID = layoutCollectionID
+        if let existing = reportingView.layoutCollection,
+          !layoutCollection.needsPositionReconciliation(with: existing) {
+          reportingView.layoutCollection = layoutCollection
+          return
+        }
+        reportingView.layoutCollection = layoutCollection
         onUpdate(layoutCollection)
       }
 
       final class ReportingView: UIView {
-        var layoutCollectionID: ObjectIdentifier?
+        var layoutCollection: (any TextLayoutCollection)?
       }
     }
   #endif

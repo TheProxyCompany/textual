@@ -55,14 +55,18 @@
         return
       }
 
+      // Content guard: identity differs every body invocation because
+      // `LiveTextLayoutCollection` is reallocated each time. If the structure is
+      // unchanged, swap the reference and exit — no reconciliation work needed.
+      guard layoutCollection.needsPositionReconciliation(with: self.layoutCollection) else {
+        self.layoutCollection = layoutCollection
+        return
+      }
+
       let oldLayoutCollection = self.layoutCollection
       self.layoutCollection = layoutCollection
 
       guard let selectedRange else {
-        return
-      }
-
-      guard layoutCollection.needsPositionReconciliation(with: oldLayoutCollection) else {
         return
       }
 
