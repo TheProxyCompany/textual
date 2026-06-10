@@ -73,7 +73,7 @@ extension Text {
     in environment: TextEnvironmentValues
   ) -> Text {
     let key = TextFragmentCache.Key(
-      content: AttributedString(attributedString),
+      content: AttributedString(attributedString[attributedString.startIndex ..< attributedString.endIndex]),
       environment: environment
     )
     if let cached = TextFragmentCache.shared.value(forKey: key) {
