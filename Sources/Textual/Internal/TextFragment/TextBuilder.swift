@@ -67,11 +67,21 @@ extension TextFragment {
 }
 
 extension Text {
+  @MainActor
   static func textualText(
     attributedString: some AttributedStringProtocol,
     in environment: TextEnvironmentValues
   ) -> Text {
-    Text(attributedString: attributedString, attachmentSizes: [:], in: environment)
+    let key = TextFragmentCache.Key(
+      content: AttributedString(attributedString),
+      environment: environment
+    )
+    if let cached = TextFragmentCache.shared.value(forKey: key) {
+      return cached
+    }
+    let text = Text(attributedString: attributedString, attachmentSizes: [:], in: environment)
+    TextFragmentCache.shared.set(text, forKey: key)
+    return text
   }
 
   fileprivate init(
@@ -148,4 +158,41 @@ extension AttributedStringProtocol {
 private struct AttachmentKey: Hashable {
   let attachment: AnyAttachment
   let font: Font?
+}
+
+// MARK: - Attachment-free Text cache
+//
+// Building a SwiftUI.Text from attributed runs maps every run and folds them with nested
+// string interpolation — O(runs) per call. For attachment-free content this Text is a pure
+// value function of (content, environment), so it can be reused across view recreations
+// (e.g. switching back to a conversation rebuilds every row's StructuredText from scratch).
+// The cache is keyed on the full attributed content, so streaming deltas and edits miss
+// cleanly and resolve to a fresh build.
+@MainActor
+final class TextFragmentCache {
+  static let shared = TextFragmentCache()
+
+  struct Key: Hashable {
+    let content: AttributedString
+    let environment: TextEnvironmentValues
+  }
+
+  private final class Box {
+    let value: Text
+    init(_ value: Text) { self.value = value }
+  }
+
+  private let storage = NSCache<KeyBox<Key>, Box>()
+
+  private init() {
+    storage.countLimit = 512
+  }
+
+  func value(forKey key: Key) -> Text? {
+    storage.object(forKey: KeyBox(key))?.value
+  }
+
+  func set(_ value: Text, forKey key: Key) {
+    storage.setObject(Box(value), forKey: KeyBox(key))
+  }
 }

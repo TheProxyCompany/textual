@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 /// A view that displays rich, structured text.
@@ -106,14 +107,22 @@ public struct StructuredText: View {
 
   private let markup: String
   private let parser: any MarkupParser
+  private let cacheKey: String?
 
   /// Creates a structured-text view by parsing `markup` with a custom parser.
   ///
   /// Use this initializer when you want to provide your own `MarkupParser` implementation.
   public init(_ markup: String, parser: any MarkupParser) {
+    self.init(markup, parser: parser, cacheKey: nil)
+  }
+
+  init(_ markup: String, parser: any MarkupParser, cacheKey: String?) {
     self.markup = markup
     self.parser = parser
-    self._attributedString = State(initialValue: Self.parse(markup, parser: parser))
+    self.cacheKey = cacheKey
+    self._attributedString = State(
+      initialValue: Self.parse(markup, parser: parser, cacheKey: cacheKey)
+    )
   }
 
   public var body: some View {
@@ -131,14 +140,54 @@ public struct StructuredText: View {
   }
 
   private func markupDidChange(_ markup: String) {
-    let next = Self.parse(markup, parser: parser)
+    let next = Self.parse(markup, parser: parser, cacheKey: cacheKey)
     if attributedString != next {
       attributedString = next
     }
   }
 
-  private static func parse(_ markup: String, parser: any MarkupParser) -> AttributedString {
-    (try? parser.attributedString(for: markup)) ?? .init()
+  private static func parse(
+    _ markup: String,
+    parser: any MarkupParser,
+    cacheKey: String?
+  ) -> AttributedString {
+    if let cacheKey, let cached = ParsedMarkupCache.shared.value(forKey: cacheKey) {
+      return cached
+    }
+    let parsed = (try? parser.attributedString(for: markup)) ?? .init()
+    if let cacheKey {
+      ParsedMarkupCache.shared.set(parsed, forKey: cacheKey)
+    }
+    return parsed
+  }
+}
+
+/// Bounded process-wide cache of parsed markup, keyed by a caller-supplied identity.
+///
+/// `AttributedString` is `Sendable` and immutable once produced, so a fully-parsed value can be
+/// reused across view recreations (for example, when a list rebuilds its rows). The cache only
+/// stores results the caller has explicitly opted into via a `cacheKey`; the key must uniquely
+/// identify both the markup content and the parser configuration that produced it.
+final class ParsedMarkupCache: @unchecked Sendable {
+  static let shared = ParsedMarkupCache()
+
+  private final class Box {
+    let value: AttributedString
+    init(_ value: AttributedString) { self.value = value }
+  }
+
+  private let storage = NSCache<NSString, Box>()
+
+  private init() {
+    storage.countLimit = 512
+  }
+
+  func value(forKey key: String) -> AttributedString? {
+    storage.object(forKey: key as NSString)?.value
+  }
+
+  func set(_ value: AttributedString, forKey key: String) {
+    storage.setObject(Box(value), forKey: key as NSString)
   }
 }
 
@@ -166,12 +215,15 @@ extension StructuredText {
     baseURL: URL? = nil,
     syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension] = []
   ) {
+    let cacheKey: String? =
+      baseURL == nil && syntaxExtensions.isEmpty ? markdown : nil
     self.init(
       markdown,
       parser: .markdown(
         baseURL: baseURL,
         syntaxExtensions: syntaxExtensions
-      )
+      ),
+      cacheKey: cacheKey
     )
   }
 }
