@@ -116,6 +116,9 @@ public struct StructuredText: View {
     self.init(markup, parser: parser, cacheKey: nil)
   }
 
+  /// - Parameter cacheKey: When non-nil, the parsed result is cached and reused under this key.
+  ///   The key must uniquely identify BOTH the markup content AND the parser configuration that
+  ///   produced it; only the default-config `markdown` convenience path may safely supply one.
   init(_ markup: String, parser: any MarkupParser, cacheKey: String?) {
     self.markup = markup
     self.parser = parser
@@ -192,6 +195,39 @@ final class ParsedMarkupCache: @unchecked Sendable {
 }
 
 extension StructuredText {
+  /// Parses `markdown` with the default Markdown configuration and stores the result in the shared
+  /// cache under the same key `init(markdown:)` uses, so a later view creation is a cache hit.
+  ///
+  /// `AttributedString` is `Sendable` and the parse is pure, so callers may invoke this off the main
+  /// thread (e.g. `Task.detached`) to warm rows before they enter a list. The parse runs the SAME
+  /// default-config path as `init(markdown:)` (no `baseURL`, no syntax extensions), which is the only
+  /// configuration whose cache key is the raw markdown string; non-default configs are not cached and
+  /// this method has no effect for them.
+  ///
+  /// - Returns: `true` when a value was produced and cached (or was already cached); `false` only if
+  ///   the parser threw.
+  @discardableResult
+  public nonisolated static func prewarm(markdown: String) -> Bool {
+    let cacheKey = markdown
+    if ParsedMarkupCache.shared.value(forKey: cacheKey) != nil {
+      return true
+    }
+    // Reproduce the default-config parse `init(markdown:)` caches: no baseURL and no syntax
+    // extensions, so the PatternProcessor pass is identity and the cached value is exactly this
+    // `AttributedString(markdown:)`. Constructing it directly (rather than through the @MainActor
+    // `MarkupParser` protocol method) keeps prewarm callable off the main thread.
+    guard let parsed = try? AttributedString(
+      markdown: markdown,
+      including: \.textual,
+      options: .init(),
+      baseURL: nil
+    ) else {
+      return false
+    }
+    ParsedMarkupCache.shared.set(parsed, forKey: cacheKey)
+    return true
+  }
+
   /// Creates a structured-text view from a Markdown string.
   ///
   /// This is a convenience initializer that uses Textual’s Markdown parser. To render other
