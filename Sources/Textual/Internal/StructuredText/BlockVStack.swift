@@ -43,22 +43,28 @@ extension StructuredText {
 
   fileprivate struct BlockVStackLayout: Layout {
     struct Cache {
+      // Parent layouts (SwiftUI's StackLayout in particular) probe children at
+      // several candidate widths within a single layout pass. Memoize per
+      // proposed width: a single-slot cache thrashes on every alternation and
+      // the re-measure cost compounds multiplicatively through nested blocks.
       var spacings: [CGFloat]
-      var measuredWidth: CGFloat?
-      var measuredSizes: [CGSize]
+      var measuredSizes: [CGFloat?: [CGSize]]
     }
+
+    /// Bounds the per-width memo so a pathological parent proposing many
+    /// distinct widths cannot grow the cache without limit.
+    private static let measuredSizesCacheLimit = 128
 
     let textAlignment: TextAlignment
     let listItemSpacing: BlockSpacing?
 
     func makeCache(subviews: Subviews) -> Cache {
-      Cache(spacings: spacings(for: subviews), measuredWidth: nil, measuredSizes: [])
+      Cache(spacings: spacings(for: subviews), measuredSizes: [:])
     }
 
     func updateCache(_ cache: inout Cache, subviews: Subviews) {
       cache.spacings = spacings(for: subviews)
-      cache.measuredWidth = nil
-      cache.measuredSizes = []
+      cache.measuredSizes = [:]
     }
 
     func sizeThatFits(
@@ -137,14 +143,16 @@ extension StructuredText {
       subviews: Subviews,
       cache: inout Cache
     ) -> [CGSize] {
-      if cache.measuredWidth == proposal.width, cache.measuredSizes.count == subviews.count {
-        return cache.measuredSizes
+      if let sizes = cache.measuredSizes[proposal.width], sizes.count == subviews.count {
+        return sizes
       }
 
       let viewProposal = ProposedViewSize(width: proposal.width, height: nil)
       let sizes = subviews.map { $0.sizeThatFits(viewProposal) }
-      cache.measuredWidth = proposal.width
-      cache.measuredSizes = sizes
+      if cache.measuredSizes.count >= Self.measuredSizesCacheLimit {
+        cache.measuredSizes.removeAll(keepingCapacity: true)
+      }
+      cache.measuredSizes[proposal.width] = sizes
       return sizes
     }
 
