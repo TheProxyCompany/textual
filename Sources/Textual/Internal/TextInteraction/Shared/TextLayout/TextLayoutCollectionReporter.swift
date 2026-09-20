@@ -13,14 +13,9 @@
       }
 
       func updateNSView(_ nsView: ReportingView, context: Context) {
-        // Identity guards are useless here: `LiveTextLayoutCollection` is allocated
-        // fresh per body, so ObjectIdentifier always differs. Compare by structure
-        // signature instead — if the layouts didn't meaningfully change, skip the work.
-        if let existing = nsView.layoutCollection,
-          !layoutCollection.needsPositionReconciliation(with: existing) {
-          nsView.layoutCollection = layoutCollection
-          return
-        }
+        // Always refresh live geometry, including layout identity and origins.
+        // The model already skips expensive position reconciliation when the
+        // text structure is unchanged; skipping this handoff leaves stale geometry.
         nsView.layoutCollection = layoutCollection
         onUpdate(layoutCollection)
       }
