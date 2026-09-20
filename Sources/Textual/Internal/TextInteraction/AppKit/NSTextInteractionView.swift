@@ -11,7 +11,15 @@
   // `openURL`.
 
   final class NSTextInteractionView: NSView {
-    var model: TextSelectionModel
+    var model: TextSelectionModel {
+      didSet {
+        guard oldValue !== model else { return }
+        oldValue.selectionDidChange = nil
+        oldValue.layoutDidChange = nil
+        observeSelection()
+        needsDisplay = true
+      }
+    }
     var exclusionRects: [CGRect]
     var openURL: OpenURLAction
 
@@ -31,11 +39,37 @@
       self.openURL = openURL
 
       super.init(frame: .zero)
-      self.wantsLayer = false
+      self.wantsLayer = true
+      observeSelection()
     }
 
     required init?(coder: NSCoder) {
       fatalError("init(coder:) has not been implemented")
+    }
+
+    private func observeSelection() {
+      model.selectionDidChange = { [weak self] in self?.needsDisplay = true }
+      model.layoutDidChange = { [weak self] in
+        self?.needsDisplay = true
+        if let self { self.window?.invalidateCursorRects(for: self) }
+      }
+    }
+
+    // Paint from the same live geometry that handles the drag. Fragment-level
+    // SwiftUI backgrounds can hold an obsolete Text.Layout during reflow and
+    // silently lose the highlight even though the selected range still exists.
+    override func draw(_ dirtyRect: NSRect) {
+      guard let range = model.selectedRange, !range.isCollapsed else { return }
+      NSGraphicsContext.saveGraphicsState()
+      defer { NSGraphicsContext.restoreGraphicsState() }
+      let clip = NSBezierPath(rect: bounds)
+      for rect in exclusionRects { clip.appendRect(rect) }
+      clip.windingRule = .evenOdd
+      clip.addClip()
+      NSColor.systemBlue.withAlphaComponent(0.34).setFill()
+      for selection in model.selectionRects(for: range) {
+        selection.rect.integral.fill()
+      }
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {

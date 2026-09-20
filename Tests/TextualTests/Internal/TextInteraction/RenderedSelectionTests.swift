@@ -13,7 +13,7 @@ import Testing
                 .foregroundStyle(dark ? Color.white : Color.black)
                 .textual.textSelection(.enabled)
                 .padding(24)
-                .frame(width: 500, height: 320)
+                .frame(maxWidth: .infinity, minHeight: 320)
                 .background(dark ? Color(red: 0.1, green: 0.07, blue: 0.09) : Color(red: 0.89, green: 0.86, blue: 0.74))
                 .environment(\.colorScheme, dark ? .dark : .light)
             let host = NSHostingView(rootView: content)
@@ -50,6 +50,31 @@ import Testing
             #expect(!interaction.model.selectionRects(for: interaction.model.selectedRange!).isEmpty)
             RunLoop.main.run(until: Date().addingTimeInterval(0.2))
             #expect(try bluePixelCount() > before + 100)
+            for width in [430.0, 560.0, 500.0] {
+                window.setContentSize(NSSize(width: width, height: 320))
+                RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+                #expect(interaction.model.selectedRange != nil)
+                #expect(try bluePixelCount() > before + 100)
+                let rect = try #require(interaction.model.textContentRects().dropFirst().first)
+                let start = interaction.convert(CGPoint(x: rect.minX + 4, y: rect.minY + 8), to: nil)
+                let end = interaction.convert(CGPoint(x: rect.minX + min(180, rect.width - 4), y: rect.minY + 8), to: nil)
+                func event(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+                    try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+                }
+                interaction.mouseDown(with: try event(.leftMouseDown, start))
+                interaction.mouseDragged(with: try event(.leftMouseDragged, end))
+                interaction.mouseUp(with: try event(.leftMouseUp, end))
+                RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+                #expect(try bluePixelCount() > before + 30)
+                window.orderOut(nil)
+                window.orderBack(nil)
+                RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+                #expect(try bluePixelCount() > before + 30)
+                interaction.model.selectedRange = nil
+                RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+                #expect(try bluePixelCount() <= before + 5)
+                interaction.selectAll(nil)
+            }
         }
     }
 }
