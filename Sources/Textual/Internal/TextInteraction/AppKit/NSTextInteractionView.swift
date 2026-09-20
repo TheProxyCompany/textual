@@ -62,6 +62,8 @@
       }
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
     override func mouseDown(with event: NSEvent) {
       window?.makeFirstResponder(self)
       let location = convert(event.locationInWindow, from: nil)
@@ -179,57 +181,43 @@
     }
 
     private func updateSelectionForContextMenu(at location: CGPoint) {
-      guard let position = model.closestPosition(to: location) else {
-        resetSelection()
-        return
-      }
-
-      if let selectedRange = model.selectedRange, selectedRange.contains(position) {
-        // do nothing
-        return
-      }
-
-      model.selectedRange = model.wordRange(for: position)
+      window?.makeFirstResponder(self)
+      // Right-click must not replace a deliberate selection with a single word.
+      // With no selection, Copy operates on the entire rendered message.
+      if let range = model.selectedRange, !range.isCollapsed { return }
+      selectAll(nil)
     }
 
     private func makeContextMenu() -> NSMenu {
-      let contextMenu = NSMenu()
+      let menu = NSMenu()
+      guard model.hasText else { return menu }
 
-      guard let selectedRange = model.selectedRange, !selectedRange.isCollapsed else {
-        return contextMenu
-      }
-
-      // Get the localized title for the share action
-      let sharingPicker = NSSharingServicePicker(items: [])
-      let shareActionTitle = sharingPicker.standardShareMenuItem.title
-
-      // Get the localized title for the copy action
-      let copyActionTitle =
-        if let defaultMenu = NSTextView.defaultMenu,
-          let copyAction = defaultMenu.items.first(where: { $0.action == #selector(copy(_:)) })
-        {
-          copyAction.title
-        } else {
-          NSLocalizedString("Copy", bundle: .main, comment: "")
-        }
-
-      contextMenu.addItem(
-        .init(
-          title: shareActionTitle,
-          action: #selector(share(_:)),
-          keyEquivalent: ""
-        )
+      let copy = NSMenuItem(
+        title: NSLocalizedString("Copy", bundle: .main, comment: ""),
+        action: #selector(copy(_:)), keyEquivalent: ""
       )
-      contextMenu.addItem(.separator())
-      contextMenu.addItem(
-        .init(
-          title: copyActionTitle,
-          action: #selector(copy(_:)),
-          keyEquivalent: ""
-        )
+      copy.target = self
+      menu.addItem(copy)
+      let copyAll = NSMenuItem(
+        title: NSLocalizedString("Copy All", bundle: .main, comment: "Copy all rendered text"),
+        action: #selector(copyAll(_:)), keyEquivalent: ""
       )
-
-      return contextMenu
+      copyAll.target = self
+      menu.addItem(copyAll)
+      let selectAll = NSMenuItem(
+        title: NSLocalizedString("Select All", bundle: .main, comment: ""),
+        action: #selector(selectAll(_:)), keyEquivalent: ""
+      )
+      selectAll.target = self
+      menu.addItem(selectAll)
+      menu.addItem(.separator())
+      let share = NSMenuItem(
+        title: NSSharingServicePicker(items: []).standardShareMenuItem.title,
+        action: #selector(share(_:)), keyEquivalent: ""
+      )
+      share.target = self
+      menu.addItem(share)
+      return menu
     }
 
     private func modifySelection(
@@ -289,7 +277,15 @@
         return
       }
 
-      let attributedText = model.attributedText(in: selectedRange)
+      copy(range: selectedRange)
+    }
+
+    @objc private func copyAll(_ sender: Any?) {
+      copy(range: TextRange(start: model.startPosition, end: model.endPosition))
+    }
+
+    private func copy(range: TextRange) {
+      let attributedText = model.attributedText(in: range)
 
       let pasteboard = NSPasteboard.general
       pasteboard.clearContents()
@@ -303,7 +299,7 @@
   extension NSTextInteractionView: NSUserInterfaceValidations {
     func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
       switch item.action {
-      case #selector(selectAll(_:)):
+      case #selector(selectAll(_:)), #selector(copyAll(_:)):
         return model.hasText
       case #selector(copy(_:)):
         guard let selectedRange = model.selectedRange else {

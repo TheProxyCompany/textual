@@ -15,7 +15,10 @@ struct TextSelectionBackground: ViewModifier {
 
   func body(content: Content) -> some View {
     #if TEXTUAL_ENABLE_TEXT_SELECTION && canImport(AppKit)
-      if textSelectionModel?.selectedRange != nil {
+      // Keep the layout-producing subtree stable when selection changes.
+      // Inserting the background only after selection recreates Text.Layout;
+      // the highlight then refers to a layout absent from the shared model.
+      if textSelectionModel != nil {
         content
           .backgroundPreferenceValue(Text.LayoutKey.self) { value in
             if let anchoredLayout = value.first {

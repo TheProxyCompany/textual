@@ -21,12 +21,10 @@
       self.origin = origin
     }
 
-    /// The selection highlight. `selectedTextBackgroundColor` turns into the
-    /// unemphasized dark gray whenever the window is not key, which made the
-    /// highlight invisible on Proxy's always-on wallpaper panel. The accent color
-    /// at partial alpha reads on light and dark grounds in every window state.
+    /// A fixed chromatic highlight stays visible in non-key panels, including
+    /// when macOS uses the graphite accent. Never depend on key-window emphasis.
     static var selectionFillColor: NSColor {
-      NSColor.controlAccentColor.withAlphaComponent(0.4)
+      NSColor.systemBlue.withAlphaComponent(0.38)
     }
 
     var body: some View {
@@ -41,10 +39,16 @@
                 Path(selectionRect.rect.integral),
                 with: .color(.init(nsColor: Self.selectionFillColor))
               )
+              context.stroke(
+                Path(selectionRect.rect.integral.insetBy(dx: 0.5, dy: 0.5)),
+                with: .color(Color(nsColor: .systemBlue).opacity(0.65)),
+                lineWidth: 1
+              )
             }
           }
         }
       }
+      .allowsHitTesting(false)
       .onChange(of: textSelectionModel?.selectedRange, initial: true, updateSelectionRects)
       .onChange(of: layout, initial: true, updateSelectionRects)
     }
