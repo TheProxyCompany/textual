@@ -121,9 +121,24 @@ extension Text {
       return text
     }
 
-    self = textValues.reduce(Text(verbatim: "")) { partialResult, text in
-      Text("\(partialResult)\(text)")
+    // A left fold builds one nested LocalizedStringKey per attributed run.
+    // SwiftUI resolves that tree recursively; long highlighted code blocks can
+    // exhaust the main thread's stack. Pair adjacent runs to keep depth logarithmic
+    // without losing their attributes, links, or attachment placeholders.
+    var level = textValues
+    while level.count > 1 {
+      var next: [Text] = []
+      next.reserveCapacity((level.count + 1) / 2)
+      for index in stride(from: 0, to: level.count, by: 2) {
+        if index + 1 < level.count {
+          next.append(Text("\(level[index])\(level[index + 1])"))
+        } else {
+          next.append(level[index])
+        }
+      }
+      level = next
     }
+    self = level.first ?? Text(verbatim: "")
   }
 
   private init(placeholderSize size: CGSize) {
