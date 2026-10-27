@@ -121,8 +121,24 @@ extension Text {
       return text
     }
 
-    self = textValues.reduce(Text(verbatim: "")) { partialResult, text in
-      Text("\(partialResult)\(text)")
+    self = Text.joined(textValues[...])
+  }
+
+  /// Joins runs as a balanced tree. A left fold nests one interpolation level
+  /// per run, and SwiftUI resolves that nesting recursively, so a message with
+  /// a few hundred styled runs overflowed the main thread stack. A balanced
+  /// join keeps the depth near log2(runs).
+  private static func joined(_ texts: ArraySlice<Text>) -> Text {
+    switch texts.count {
+    case 0:
+      return Text(verbatim: "")
+    case 1:
+      return texts[texts.startIndex]
+    default:
+      let mid = texts.startIndex + texts.count / 2
+      let left = joined(texts[..<mid])
+      let right = joined(texts[mid...])
+      return Text("\(left)\(right)")
     }
   }
 
