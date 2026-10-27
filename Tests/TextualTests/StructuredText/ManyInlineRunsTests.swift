@@ -14,5 +14,12 @@ extension StructuredText {
       let renderer = ImageRenderer(content: view)
       #expect(renderer.cgImage != nil)
     }
+
+    @Test func paragraphWithThousandsOfLinkRunsRenders() {
+      let markdown = (0..<2500).map { "[l\($0)](https://example.com/\($0)) **b\($0)**" }.joined(separator: " ")
+      let view = StructuredText(markdown: markdown).frame(width: 800)
+      let renderer = ImageRenderer(content: view)
+      #expect(renderer.cgImage != nil)
+    }
   }
 }
