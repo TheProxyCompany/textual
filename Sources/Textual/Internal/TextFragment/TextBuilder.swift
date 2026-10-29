@@ -89,9 +89,16 @@ extension Text {
     attachmentSizes: [AttachmentKey: CGSize],
     in environment: TextEnvironmentValues
   ) {
-    let textValues = attributedString.runs.map { run in
-      var text: Text
+    var textValues: [Text] = []
+    var pendingRange: Range<AttributedString.Index>?
 
+    func flushPendingRange() {
+      guard let range = pendingRange else { return }
+      textValues.append(Text(AttributedString(attributedString[range])))
+      pendingRange = nil
+    }
+
+    for run in attributedString.runs {
       var runEnvironment = environment
       runEnvironment.font = run.font ?? environment.font
 
@@ -100,8 +107,8 @@ extension Text {
       }
 
       if let key, let size = attachmentSizes[key] {
-        // Create placeholder
-        text = Text(placeholderSize: size)
+        flushPendingRange()
+        var text = Text(placeholderSize: size)
           .baselineOffset(key.attachment.baselineOffset(in: runEnvironment))
           .customAttribute(
             AttachmentAttribute(
@@ -109,20 +116,41 @@ extension Text {
               presentationIntent: run.presentationIntent
             )
           )
+        if let link = run.link {
+          text = text.customAttribute(LinkAttribute(link))
+        }
+        textValues.append(text)
+      } else if let link = run.link {
+        flushPendingRange()
+        let text = Text(AttributedString(attributedString[run.range]))
+          .customAttribute(LinkAttribute(link))
+        textValues.append(text)
+      } else if let existing = pendingRange {
+        pendingRange = existing.lowerBound ..< run.range.upperBound
       } else {
-        text = Text(AttributedString(attributedString[run.range]))
+        pendingRange = run.range
       }
-
-      // Add link attribute for TextLinkInteraction
-      if let link = run.link {
-        text = text.customAttribute(LinkAttribute(link))
-      }
-
-      return text
     }
+    flushPendingRange()
 
-    self = textValues.reduce(Text(verbatim: "")) { partialResult, text in
-      Text("\(partialResult)\(text)")
+    self = Text.joined(textValues[...])
+  }
+
+  /// Joins runs as a balanced tree. A left fold nests one interpolation level
+  /// per run, and SwiftUI resolves that nesting recursively, so a message with
+  /// a few hundred styled runs overflowed the main thread stack. A balanced
+  /// join keeps the depth near log2(runs).
+  private static func joined(_ texts: ArraySlice<Text>) -> Text {
+    switch texts.count {
+    case 0:
+      return Text(verbatim: "")
+    case 1:
+      return texts[texts.startIndex]
+    default:
+      let mid = texts.startIndex + texts.count / 2
+      let left = joined(texts[..<mid])
+      let right = joined(texts[mid...])
+      return Text("\(left)\(right)")
     }
   }
 
