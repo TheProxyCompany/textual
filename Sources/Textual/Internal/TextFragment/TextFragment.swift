@@ -10,7 +10,7 @@ import SwiftUI
 // actual attachment views are rendered in an overlay using the resolved Text.Layout
 // geometry. Three modifiers are applied at the fragment level:
 //
-// - TextSelectionBackground renders selection highlights on macOS
+// - AppKit text interaction paints selection using the live shared geometry
 // - AttachmentOverlay draws attachments at their run locations with selection-aware dimming
 // - TextLinkInteraction handles tap gestures on links
 //
@@ -55,7 +55,6 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
         base
       }
     }
-    .modifier(TextSelectionBackground())
 
     switch (attachments.isEmpty, hasLinks) {
     case (true, false):

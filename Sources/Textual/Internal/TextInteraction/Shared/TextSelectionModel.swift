@@ -35,6 +35,9 @@
     var selectionDidChange: (() -> Void)?
 
     @ObservationIgnored
+    var layoutDidChange: (() -> Void)?
+
+    @ObservationIgnored
     private var layoutCollection: any TextLayoutCollection
 
     private var selectedRangeStorage: TextRange?
@@ -54,6 +57,8 @@
       guard self.layoutCollection !== layoutCollection else {
         return
       }
+
+      defer { layoutDidChange?() }
 
       // Content guard: identity differs every body invocation because
       // `LiveTextLayoutCollection` is reallocated each time. If the structure is
