@@ -27,6 +27,42 @@
       return TextRange(start: start, end: end)
     }
 
+    @available(macOS 10.0, *)
+    @available(iOS, unavailable)
+    @available(visionOS, unavailable)
+    func wordRange(at point: CGPoint) -> TextRange? {
+      guard !layouts.isEmpty else { return nil }
+      let layoutIndex = layoutIndex(closestTo: point)
+      let layout = layouts[layoutIndex]
+      guard !layout.lines.isEmpty else { return nil }
+
+      let localPoint = CGPoint(x: point.x - layout.origin.x, y: point.y - layout.origin.y)
+      let lineIndex = layout.lineIndex(closestToY: localPoint.y)
+      let line = layout.lines[lineIndex]
+
+      // Native NSTextView returns empty selection when double-clicking past line bounds
+      guard localPoint.x <= line.typographicBounds.maxX else { return nil }
+
+      guard let charRange = characterRange(at: point) else { return nil }
+      return wordRange(for: charRange.start)
+    }
+
+    @available(macOS 10.0, *)
+    @available(iOS, unavailable)
+    @available(visionOS, unavailable)
+    func wordDraggedRange(anchor: TextRange, to position: TextPosition) -> TextRange? {
+      if position < anchor.start {
+        guard let targetWord = wordRange(for: position) else { return anchor }
+        return TextRange(start: min(anchor.start, targetWord.start), end: anchor.end)
+      } else if position > anchor.end {
+        let probePosition = self.position(from: position, offset: -1) ?? position
+        guard let targetWord = wordRange(for: probePosition) else { return anchor }
+        return TextRange(start: anchor.start, end: max(anchor.end, targetWord.end))
+      } else {
+        return anchor
+      }
+    }
+
     func blockRange(for position: TextPosition) -> TextRange? {
       guard layouts.indices.contains(position.indexPath.layout) else {
         return nil

@@ -63,6 +63,15 @@
     func closestPosition(to point: CGPoint) -> TextPosition? {
       guard !layouts.isEmpty else { return nil }
 
+      if let firstLayout = layouts.first, let firstLine = firstLayout.lines.first {
+        let firstMinY = firstLine.typographicBounds.minY + firstLayout.origin.y
+        if point.y < firstMinY { return startPosition }
+      }
+      if let lastLayout = layouts.last, let lastLine = lastLayout.lines.last {
+        let lastMaxY = lastLine.typographicBounds.maxY + lastLayout.origin.y
+        if point.y > lastMaxY { return endPosition }
+      }
+
       let layoutIndex = layoutIndex(closestTo: point)
       let layout = layouts[layoutIndex]
 
@@ -274,13 +283,19 @@
       return line.typographicBounds.offsetBy(dx: layout.origin.x, dy: layout.origin.y)
     }
 
-    fileprivate func layoutIndex(closestTo point: CGPoint) -> Int {
+    // Prioritize vertical distance first so dragging into the horizontal margin of a short line
+    // never jumps across blocks to a wider paragraph above/below.
+    func layoutIndex(closestTo point: CGPoint) -> Int {
       var closestIndex = 0
-      var closestDistance = CGFloat.greatestFiniteMagnitude
+      var bestVerticalDistance = CGFloat.greatestFiniteMagnitude
+      var bestHorizontalDistance = CGFloat.greatestFiniteMagnitude
       for (index, layout) in zip(layouts.indices, layouts) {
-        let distance = layout.frame.distanceSquared(to: point)
-        if distance < closestDistance {
-          closestDistance = distance
+        let dy = layout.frame.verticalDistance(to: point.y)
+        let dx = layout.frame.horizontalDistance(to: point.x)
+        if dy < bestVerticalDistance || (dy == bestVerticalDistance && dx < bestHorizontalDistance)
+        {
+          bestVerticalDistance = dy
+          bestHorizontalDistance = dx
           closestIndex = index
         }
       }
@@ -289,7 +304,7 @@
   }
 
   extension TextLayout {
-    fileprivate func lineIndex(closestToY y: CGFloat) -> Int {
+    func lineIndex(closestToY y: CGFloat) -> Int {
       var closestIndex = 0
       var closestDistance = CGFloat.greatestFiniteMagnitude
       for (index, line) in lines.enumerated() {

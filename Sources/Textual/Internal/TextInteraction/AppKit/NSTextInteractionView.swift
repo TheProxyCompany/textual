@@ -11,13 +11,17 @@
   // `openURL`.
 
   final class NSTextInteractionView: NSView {
+    private enum SelectionGranularity {
+      case character
+      case word
+      case paragraph
+    }
+
     var model: TextSelectionModel {
       didSet {
         guard oldValue !== model else { return }
-        oldValue.selectionDidChange = nil
-        oldValue.layoutDidChange = nil
-        observeSelection()
-        needsDisplay = true
+        oldValue.interactionLayoutDidChange = nil
+        observeLayout()
       }
     }
     var exclusionRects: [CGRect]
@@ -26,8 +30,10 @@
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { true }
 
-    private var dragStart: TextPosition?
+    private var dragAnchorRange: TextRange?
+    private var selectionGranularity: SelectionGranularity = .character
     private var selectionAnchor: TextPosition?
+    private var pendingLinkURL: URL?
 
     init(
       model: TextSelectionModel,
@@ -40,35 +46,16 @@
 
       super.init(frame: .zero)
       self.wantsLayer = true
-      observeSelection()
+      observeLayout()
     }
 
     required init?(coder: NSCoder) {
       fatalError("init(coder:) has not been implemented")
     }
 
-    private func observeSelection() {
-      model.selectionDidChange = { [weak self] in self?.needsDisplay = true }
-      model.layoutDidChange = { [weak self] in
-        self?.needsDisplay = true
+    private func observeLayout() {
+      model.interactionLayoutDidChange = { [weak self] in
         if let self { self.window?.invalidateCursorRects(for: self) }
-      }
-    }
-
-    // Paint from the same live geometry that handles the drag. Fragment-level
-    // SwiftUI backgrounds can hold an obsolete Text.Layout during reflow and
-    // silently lose the highlight even though the selected range still exists.
-    override func draw(_ dirtyRect: NSRect) {
-      guard let range = model.selectedRange, !range.isCollapsed else { return }
-      NSGraphicsContext.saveGraphicsState()
-      defer { NSGraphicsContext.restoreGraphicsState() }
-      let clip = NSBezierPath(rect: bounds)
-      for rect in exclusionRects { clip.appendRect(rect) }
-      clip.windingRule = .evenOdd
-      clip.addClip()
-      NSColor.systemBlue.withAlphaComponent(0.34).setFill()
-      for selection in model.selectionRects(for: range) {
-        selection.rect.integral.fill()
       }
     }
 
@@ -101,47 +88,103 @@
     override func mouseDown(with event: NSEvent) {
       window?.makeFirstResponder(self)
       let location = convert(event.locationInWindow, from: nil)
+      pendingLinkURL = nil
+
+      if event.modifierFlags.contains(.shift), let existingRange = model.selectedRange {
+        let anchor = selectionAnchor ?? existingRange.start
+        selectionAnchor = anchor
+        if dragAnchorRange == nil {
+          dragAnchorRange = TextRange(start: anchor, end: anchor)
+        }
+        extendSelection(to: location)
+        return
+      }
 
       switch event.clickCount {
       case 1:
-        if let url = model.url(for: location) {
-          openURL(url)
-        } else {
-          resetSelection()
+        pendingLinkURL = model.url(for: location)
+        resetSelection()
+        selectionGranularity = .character
+        if let position = model.closestPosition(to: location) {
+          let collapsed = TextRange(start: position, end: position)
+          dragAnchorRange = collapsed
+          selectionAnchor = position
+          model.selectedRange = collapsed
         }
-        dragStart = model.closestPosition(to: location)
       case 2:
-        if let position = model.closestPosition(to: location) {
-          model.selectedRange = model.wordRange(for: position)
+        selectionGranularity = .word
+        if let wordRange = model.wordRange(at: location) {
+          dragAnchorRange = wordRange
+          selectionAnchor = wordRange.start
+          model.selectedRange = wordRange
+        } else {
+          dragAnchorRange = nil
         }
-        dragStart = nil
       case 3:
-        if let position = model.closestPosition(to: location) {
-          model.selectedRange = model.blockRange(for: position)
+        selectionGranularity = .paragraph
+        if let position = model.closestPosition(to: location),
+          let blockRange = model.blockRange(for: position)
+        {
+          dragAnchorRange = blockRange
+          selectionAnchor = blockRange.start
+          model.selectedRange = blockRange
+        } else {
+          dragAnchorRange = nil
         }
-        dragStart = nil
       default:
         break
       }
     }
 
     override func mouseDragged(with event: NSEvent) {
-      guard let dragStart else {
-        return
-      }
-
+      pendingLinkURL = nil
       let location = convert(event.locationInWindow, from: nil)
-
-      guard let currentPosition = model.closestPosition(to: location) else {
-        return
-      }
-
-      model.selectedRange = TextRange(from: dragStart, to: currentPosition)
+      extendSelection(to: location)
       autoscroll(with: event)
     }
 
     override func mouseUp(with event: NSEvent) {
-      dragStart = nil
+      if let url = pendingLinkURL, model.selectedRange?.isCollapsed ?? true {
+        openURL(url)
+      }
+      pendingLinkURL = nil
+    }
+
+    private func extendSelection(to location: CGPoint) {
+      guard let dragAnchorRange else {
+        return
+      }
+
+      switch selectionGranularity {
+      case .character:
+        guard let currentPosition = model.closestPosition(to: location) else {
+          return
+        }
+        selectionAnchor = dragAnchorRange.start
+        model.selectedRange = TextRange(from: dragAnchorRange.start, to: currentPosition)
+      case .word:
+        guard let currentPosition = model.closestPosition(to: location) else {
+          return
+        }
+        if let extended = model.wordDraggedRange(anchor: dragAnchorRange, to: currentPosition) {
+          selectionAnchor =
+            currentPosition < dragAnchorRange.start ? dragAnchorRange.end : dragAnchorRange.start
+          model.selectedRange = extended
+        }
+      case .paragraph:
+        guard
+          let currentPosition = model.closestPosition(to: location),
+          let targetBlock = model.blockRange(for: currentPosition)
+        else {
+          return
+        }
+        selectionAnchor =
+          currentPosition < dragAnchorRange.start ? dragAnchorRange.end : dragAnchorRange.start
+        model.selectedRange = TextRange(
+          start: min(dragAnchorRange.start, targetBlock.start),
+          end: max(dragAnchorRange.end, targetBlock.end)
+        )
+      }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -159,7 +202,11 @@
     }
 
     override func selectAll(_ sender: Any?) {
-      model.selectedRange = TextRange(start: model.startPosition, end: model.endPosition)
+      let fullRange = TextRange(start: model.startPosition, end: model.endPosition)
+      selectionGranularity = .character
+      selectionAnchor = fullRange.start
+      dragAnchorRange = TextRange(start: fullRange.start, end: fullRange.start)
+      model.selectedRange = fullRange
     }
 
     override func keyDown(with event: NSEvent) {
@@ -277,6 +324,8 @@
       guard let newPosition = transform(position, selectionAnchor) else {
         return
       }
+      selectionGranularity = .character
+      dragAnchorRange = TextRange(start: selectionAnchor, end: selectionAnchor)
       model.selectedRange = TextRange(from: selectionAnchor, to: newPosition)
 
       // scroll to make the new position visible
@@ -287,6 +336,8 @@
     private func resetSelection() {
       model.selectedRange = nil
       selectionAnchor = nil
+      dragAnchorRange = nil
+      selectionGranularity = .character
     }
 
     @objc private func share(_ sender: Any?) {

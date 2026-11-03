@@ -5,6 +5,7 @@
 
   @testable import Textual
 
+  @Suite(.serialized)
   struct TextSelectionModelTests {
     @Test
     func urlForPoint() throws {
