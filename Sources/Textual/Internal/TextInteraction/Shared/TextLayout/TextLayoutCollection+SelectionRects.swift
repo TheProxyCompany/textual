@@ -27,7 +27,7 @@
       }
     }
 
-    func selectionRects(for range: TextRange) -> [TextSelectionRect] {
+    func selectionRects(for range: TextRange, containerWidth: CGFloat? = nil) -> [TextSelectionRect] {
       guard !range.isCollapsed else { return [] }
 
       let startX = self.caretRect(for: range.start).minX
@@ -35,6 +35,7 @@
 
       let start = range.start.indexPath
       let end = range.end.indexPath
+      let isMultiLineSelection = (start.layout != end.layout) || (start.line != end.line)
 
       var selectionRects: [TextSelectionRect] = []
       var currentLayout: Int? = nil
@@ -53,7 +54,9 @@
             start: indexPath.layout == start.layout ? start : nil,
             end: indexPath.layout == end.layout ? end : nil,
             startX: startX,
-            endX: endX
+            endX: endX,
+            isMultiLineSelection: isMultiLineSelection,
+            containerWidth: containerWidth
           )
         }
 
@@ -82,6 +85,8 @@
       let end: IndexPath?
       let startX: CGFloat
       let endX: CGFloat
+      let isMultiLineSelection: Bool
+      let containerWidth: CGFloat?
 
       private var lines: [[TextSelectionRect]] = []
       private var currentLine: Int?
@@ -91,12 +96,16 @@
         start: IndexPath?,
         end: IndexPath?,
         startX: CGFloat,
-        endX: CGFloat
+        endX: CGFloat,
+        isMultiLineSelection: Bool,
+        containerWidth: CGFloat?
       ) {
         self.start = start
         self.end = end
         self.startX = startX
         self.endX = endX
+        self.isMultiLineSelection = isMultiLineSelection
+        self.containerWidth = containerWidth
       }
 
       mutating func appendRect(_ rect: CGRect, layoutDirection: LayoutDirection, line: Int) {
@@ -140,6 +149,21 @@
             currentLineRects.index(containing: endX)
             ?? currentLineRects.index(before: currentLineRects.endIndex)
           currentLineRects[span].trimTrailing(to: endX)
+        }
+
+        let isLastSelectedLine = (end?.line == currentLine)
+        if isMultiLineSelection && !isLastSelectedLine, let containerWidth, containerWidth > 0 {
+          let lastIdx = currentLineRects.index(before: currentLineRects.endIndex)
+          if currentLineRects[lastIdx].layoutDirection == .leftToRight {
+            let extendedMaxX = max(currentLineRects[lastIdx].rect.maxX, containerWidth)
+            currentLineRects[lastIdx].rect.size.width =
+              extendedMaxX - currentLineRects[lastIdx].rect.minX
+          } else {
+            let extendedMinX = min(currentLineRects[lastIdx].rect.minX, 0)
+            currentLineRects[lastIdx].rect.size.width =
+              currentLineRects[lastIdx].rect.maxX - extendedMinX
+            currentLineRects[lastIdx].rect.origin.x = extendedMinX
+          }
         }
 
         lines.append(currentLineRects)

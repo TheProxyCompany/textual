@@ -11,15 +11,29 @@
   // `openURL`.
 
   final class NSTextInteractionView: NSView {
-    var model: TextSelectionModel
+    private enum SelectionGranularity {
+      case character
+      case word
+      case paragraph
+    }
+
+    var model: TextSelectionModel {
+      didSet {
+        guard oldValue !== model else { return }
+        oldValue.interactionLayoutDidChange = nil
+        observeLayout()
+      }
+    }
     var exclusionRects: [CGRect]
     var openURL: OpenURLAction
 
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { true }
 
-    private var dragStart: TextPosition?
+    private var dragAnchorRange: TextRange?
+    private var selectionGranularity: SelectionGranularity = .character
     private var selectionAnchor: TextPosition?
+    private var pendingLinkURL: URL?
 
     init(
       model: TextSelectionModel,
@@ -31,11 +45,18 @@
       self.openURL = openURL
 
       super.init(frame: .zero)
-      self.wantsLayer = false
+      self.wantsLayer = true
+      observeLayout()
     }
 
     required init?(coder: NSCoder) {
       fatalError("init(coder:) has not been implemented")
+    }
+
+    private func observeLayout() {
+      model.interactionLayoutDidChange = { [weak self] in
+        if let self { self.window?.invalidateCursorRects(for: self) }
+      }
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -62,50 +83,108 @@
       }
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
     override func mouseDown(with event: NSEvent) {
       window?.makeFirstResponder(self)
       let location = convert(event.locationInWindow, from: nil)
+      pendingLinkURL = nil
+
+      if event.modifierFlags.contains(.shift), let existingRange = model.selectedRange {
+        let anchor = selectionAnchor ?? existingRange.start
+        selectionAnchor = anchor
+        if dragAnchorRange == nil {
+          dragAnchorRange = TextRange(start: anchor, end: anchor)
+        }
+        extendSelection(to: location)
+        return
+      }
 
       switch event.clickCount {
       case 1:
-        if let url = model.url(for: location) {
-          openURL(url)
-        } else {
-          resetSelection()
+        pendingLinkURL = model.url(for: location)
+        resetSelection()
+        selectionGranularity = .character
+        if let position = model.closestPosition(to: location) {
+          let collapsed = TextRange(start: position, end: position)
+          dragAnchorRange = collapsed
+          selectionAnchor = position
+          model.selectedRange = collapsed
         }
-        dragStart = model.closestPosition(to: location)
       case 2:
-        if let position = model.closestPosition(to: location) {
-          model.selectedRange = model.wordRange(for: position)
+        selectionGranularity = .word
+        if let wordRange = model.wordRange(at: location) {
+          dragAnchorRange = wordRange
+          selectionAnchor = wordRange.start
+          model.selectedRange = wordRange
+        } else {
+          dragAnchorRange = nil
         }
-        dragStart = nil
       case 3:
-        if let position = model.closestPosition(to: location) {
-          model.selectedRange = model.blockRange(for: position)
+        selectionGranularity = .paragraph
+        if let position = model.closestPosition(to: location),
+          let blockRange = model.blockRange(for: position)
+        {
+          dragAnchorRange = blockRange
+          selectionAnchor = blockRange.start
+          model.selectedRange = blockRange
+        } else {
+          dragAnchorRange = nil
         }
-        dragStart = nil
       default:
         break
       }
     }
 
     override func mouseDragged(with event: NSEvent) {
-      guard let dragStart else {
-        return
-      }
-
+      pendingLinkURL = nil
       let location = convert(event.locationInWindow, from: nil)
-
-      guard let currentPosition = model.closestPosition(to: location) else {
-        return
-      }
-
-      model.selectedRange = TextRange(from: dragStart, to: currentPosition)
+      extendSelection(to: location)
       autoscroll(with: event)
     }
 
     override func mouseUp(with event: NSEvent) {
-      dragStart = nil
+      if let url = pendingLinkURL, model.selectedRange?.isCollapsed ?? true {
+        openURL(url)
+      }
+      pendingLinkURL = nil
+    }
+
+    private func extendSelection(to location: CGPoint) {
+      guard let dragAnchorRange else {
+        return
+      }
+
+      switch selectionGranularity {
+      case .character:
+        guard let currentPosition = model.closestPosition(to: location) else {
+          return
+        }
+        selectionAnchor = dragAnchorRange.start
+        model.selectedRange = TextRange(from: dragAnchorRange.start, to: currentPosition)
+      case .word:
+        guard let currentPosition = model.closestPosition(to: location) else {
+          return
+        }
+        if let extended = model.wordDraggedRange(anchor: dragAnchorRange, to: currentPosition) {
+          selectionAnchor =
+            currentPosition < dragAnchorRange.start ? dragAnchorRange.end : dragAnchorRange.start
+          model.selectedRange = extended
+        }
+      case .paragraph:
+        guard
+          let currentPosition = model.closestPosition(to: location),
+          let targetBlock = model.blockRange(for: currentPosition)
+        else {
+          return
+        }
+        selectionAnchor =
+          currentPosition < dragAnchorRange.start ? dragAnchorRange.end : dragAnchorRange.start
+        model.selectedRange = TextRange(
+          start: min(dragAnchorRange.start, targetBlock.start),
+          end: max(dragAnchorRange.end, targetBlock.end)
+        )
+      }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -123,7 +202,11 @@
     }
 
     override func selectAll(_ sender: Any?) {
-      model.selectedRange = TextRange(start: model.startPosition, end: model.endPosition)
+      let fullRange = TextRange(start: model.startPosition, end: model.endPosition)
+      selectionGranularity = .character
+      selectionAnchor = fullRange.start
+      dragAnchorRange = TextRange(start: fullRange.start, end: fullRange.start)
+      model.selectedRange = fullRange
     }
 
     override func keyDown(with event: NSEvent) {
@@ -179,57 +262,43 @@
     }
 
     private func updateSelectionForContextMenu(at location: CGPoint) {
-      guard let position = model.closestPosition(to: location) else {
-        resetSelection()
-        return
-      }
-
-      if let selectedRange = model.selectedRange, selectedRange.contains(position) {
-        // do nothing
-        return
-      }
-
-      model.selectedRange = model.wordRange(for: position)
+      window?.makeFirstResponder(self)
+      // Right-click must not replace a deliberate selection with a single word.
+      // With no selection, Copy operates on the entire rendered message.
+      if let range = model.selectedRange, !range.isCollapsed { return }
+      selectAll(nil)
     }
 
     private func makeContextMenu() -> NSMenu {
-      let contextMenu = NSMenu()
+      let menu = NSMenu()
+      guard model.hasText else { return menu }
 
-      guard let selectedRange = model.selectedRange, !selectedRange.isCollapsed else {
-        return contextMenu
-      }
-
-      // Get the localized title for the share action
-      let sharingPicker = NSSharingServicePicker(items: [])
-      let shareActionTitle = sharingPicker.standardShareMenuItem.title
-
-      // Get the localized title for the copy action
-      let copyActionTitle =
-        if let defaultMenu = NSTextView.defaultMenu,
-          let copyAction = defaultMenu.items.first(where: { $0.action == #selector(copy(_:)) })
-        {
-          copyAction.title
-        } else {
-          NSLocalizedString("Copy", bundle: .main, comment: "")
-        }
-
-      contextMenu.addItem(
-        .init(
-          title: shareActionTitle,
-          action: #selector(share(_:)),
-          keyEquivalent: ""
-        )
+      let copy = NSMenuItem(
+        title: NSLocalizedString("Copy", bundle: .main, comment: ""),
+        action: #selector(copy(_:)), keyEquivalent: ""
       )
-      contextMenu.addItem(.separator())
-      contextMenu.addItem(
-        .init(
-          title: copyActionTitle,
-          action: #selector(copy(_:)),
-          keyEquivalent: ""
-        )
+      copy.target = self
+      menu.addItem(copy)
+      let copyAll = NSMenuItem(
+        title: NSLocalizedString("Copy All", bundle: .main, comment: "Copy all rendered text"),
+        action: #selector(copyAll(_:)), keyEquivalent: ""
       )
-
-      return contextMenu
+      copyAll.target = self
+      menu.addItem(copyAll)
+      let selectAll = NSMenuItem(
+        title: NSLocalizedString("Select All", bundle: .main, comment: ""),
+        action: #selector(selectAll(_:)), keyEquivalent: ""
+      )
+      selectAll.target = self
+      menu.addItem(selectAll)
+      menu.addItem(.separator())
+      let share = NSMenuItem(
+        title: NSSharingServicePicker(items: []).standardShareMenuItem.title,
+        action: #selector(share(_:)), keyEquivalent: ""
+      )
+      share.target = self
+      menu.addItem(share)
+      return menu
     }
 
     private func modifySelection(
@@ -255,6 +324,8 @@
       guard let newPosition = transform(position, selectionAnchor) else {
         return
       }
+      selectionGranularity = .character
+      dragAnchorRange = TextRange(start: selectionAnchor, end: selectionAnchor)
       model.selectedRange = TextRange(from: selectionAnchor, to: newPosition)
 
       // scroll to make the new position visible
@@ -265,6 +336,8 @@
     private func resetSelection() {
       model.selectedRange = nil
       selectionAnchor = nil
+      dragAnchorRange = nil
+      selectionGranularity = .character
     }
 
     @objc private func share(_ sender: Any?) {
@@ -289,7 +362,15 @@
         return
       }
 
-      let attributedText = model.attributedText(in: selectedRange)
+      copy(range: selectedRange)
+    }
+
+    @objc private func copyAll(_ sender: Any?) {
+      copy(range: TextRange(start: model.startPosition, end: model.endPosition))
+    }
+
+    private func copy(range: TextRange) {
+      let attributedText = model.attributedText(in: range)
 
       let pasteboard = NSPasteboard.general
       pasteboard.clearContents()
@@ -303,7 +384,7 @@
   extension NSTextInteractionView: NSUserInterfaceValidations {
     func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
       switch item.action {
-      case #selector(selectAll(_:)):
+      case #selector(selectAll(_:)), #selector(copyAll(_:)):
         return model.hasText
       case #selector(copy(_:)):
         guard let selectedRange = model.selectedRange else {

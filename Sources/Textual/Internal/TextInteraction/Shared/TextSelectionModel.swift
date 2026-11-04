@@ -35,6 +35,12 @@
     var selectionDidChange: (() -> Void)?
 
     @ObservationIgnored
+    var layoutDidChange: (() -> Void)?
+
+    @ObservationIgnored
+    var interactionLayoutDidChange: (() -> Void)?
+
+    @ObservationIgnored
     private var layoutCollection: any TextLayoutCollection
 
     private var selectedRangeStorage: TextRange?
@@ -53,6 +59,11 @@
     func setLayoutCollection(_ layoutCollection: any TextLayoutCollection) {
       guard self.layoutCollection !== layoutCollection else {
         return
+      }
+
+      defer {
+        layoutDidChange?()
+        interactionLayoutDidChange?()
       }
 
       // Content guard: identity differs every body invocation because
@@ -142,8 +153,8 @@
       layoutCollection.caretRect(for: position)
     }
 
-    func selectionRects(for range: TextRange) -> [TextSelectionRect] {
-      layoutCollection.selectionRects(for: range)
+    func selectionRects(for range: TextRange, containerWidth: CGFloat? = nil) -> [TextSelectionRect] {
+      layoutCollection.selectionRects(for: range, containerWidth: containerWidth)
     }
 
     func selectionRects(for range: TextRange, layout: Text.Layout) -> [TextSelectionRect] {
@@ -194,6 +205,20 @@
     @available(visionOS, unavailable)
     func wordRange(for position: TextPosition) -> TextRange? {
       layoutCollection.wordRange(for: position)
+    }
+
+    @available(macOS 10.0, *)
+    @available(iOS, unavailable)
+    @available(visionOS, unavailable)
+    func wordRange(at point: CGPoint) -> TextRange? {
+      layoutCollection.wordRange(at: point)
+    }
+
+    @available(macOS 10.0, *)
+    @available(iOS, unavailable)
+    @available(visionOS, unavailable)
+    func wordDraggedRange(anchor: TextRange, to position: TextPosition) -> TextRange? {
+      layoutCollection.wordDraggedRange(anchor: anchor, to: position)
     }
 
     @available(macOS 10.0, *)
