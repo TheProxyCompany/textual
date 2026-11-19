@@ -191,6 +191,46 @@ extension StructuredText {
       if guide == .bottom {
         return bounds.maxY
       }
+      if guide == .firstTextBaseline || guide == .lastTextBaseline {
+        return textBaseline(
+          guide, in: bounds, proposal: proposal, subviews: subviews, cache: &cache
+        )
+      }
+      return nil
+    }
+
+    /// Text baselines come from the blocks themselves: the first block that has text gives the
+    /// first baseline, and the last one gives the last baseline. A list item aligns its marker
+    /// with the first line of its content through these guides, so without them the marker
+    /// centers on the whole item.
+    private func textBaseline(
+      _ guide: VerticalAlignment,
+      in bounds: CGRect,
+      proposal: ProposedViewSize,
+      subviews: Subviews,
+      cache: inout Cache
+    ) -> CGFloat? {
+      let viewProposal = ProposedViewSize(width: proposal.width, height: nil)
+      let viewSizes = measuredSizes(for: proposal, subviews: subviews, cache: &cache)
+
+      var offsets: [CGFloat] = []
+      offsets.reserveCapacity(subviews.count)
+      var currentY: CGFloat = 0
+      for index in subviews.indices {
+        offsets.append(currentY)
+        currentY += viewSizes[index].height
+        if index < subviews.count - 1 {
+          currentY += cache.spacings[index]
+        }
+      }
+
+      let indices = guide == .firstTextBaseline
+        ? Array(subviews.indices) : Array(subviews.indices.reversed())
+      for index in indices {
+        if let baseline = subviews[index].dimensions(in: viewProposal)[explicit: guide] {
+          return bounds.minY + offsets[index] + baseline
+        }
+      }
       return nil
     }
   }
