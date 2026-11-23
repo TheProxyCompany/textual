@@ -10,6 +10,11 @@ extension StructuredText {
       self.content = content
     }
 
+    /// The code block contents as plain text, so a custom style can adapt its layout to them.
+    public var plainText: String {
+      String(content.characters)
+    }
+
     /// Copies the code block contents to the system pasteboard.
     ///
     /// Textual writes both a plain-text and an HTML representation when possible.
